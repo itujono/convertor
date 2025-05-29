@@ -1,0 +1,32 @@
+{
+  "name": "convertor",
+  "module": "index.ts",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/pg": "^8.15.2",
+    "concurrently": "^9.1.2",
+    "drizzle-kit": "^0.31.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "packageManager": "bun@1.2.2",
+  "scripts": {
+    "dev": "concurrently \"bun run dev:frontend\" \"bun run dev:backend\"",
+    "dev:frontend": "cd packages/frontend && bun run dev",
+    "dev:backend": "cd packages/backend && bun run dev",
+    "build:frontend": "cd packages/frontend && bun run build",
+    "build:backend": "cd packages/backend && bun run build",
+    "db:generate": "cd packages/db && bun run generate",
+    "db:migrate": "cd packages/db && bun run migrate"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "drizzle-orm": "^0.43.1",
+    "pg": "^8.16.0"
+  }
+}
