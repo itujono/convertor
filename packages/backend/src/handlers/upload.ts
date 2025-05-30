@@ -1,7 +1,6 @@
 import { Context } from "hono";
-import { join } from "path";
-import { mkdir } from "fs/promises";
 import { checkConversionLimit } from "../utils/conversion";
+import { uploadFile, scheduleFileCleanup } from "../utils/aws-storage";
 import type { Variables } from "../utils/types";
 
 export async function uploadHandler(c: Context<{ Variables: Variables }>) {
@@ -18,25 +17,24 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
       return c.json({ error: "No file uploaded" }, 400);
     }
 
-    console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+    console.log(
+      `Uploading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
+    );
 
-    const fileName = file.name;
-    const uploadsDir = join(process.cwd(), "uploads");
+    // Upload file to AWS S3
+    const uploadResult = await uploadFile(file, file.name, user.id, file.type);
 
-    // Ensure uploads directory exists
-    await mkdir(uploadsDir, { recursive: true });
+    console.log("File uploaded to S3 successfully:", uploadResult.filePath);
 
-    const filePath = join(uploadsDir, fileName);
-
-    console.log("Writing file to:", filePath);
-    await Bun.write(filePath, file);
-    console.log("File upload completed successfully");
+    // Schedule cleanup of uploaded file after 10 minutes (gives time for conversion)
+    scheduleFileCleanup([uploadResult.filePath], 10 * 60 * 1000);
 
     return c.json({
       message: "File uploaded successfully",
-      filePath: fileName,
-      fileName: fileName,
-      fileSize: file.size,
+      filePath: uploadResult.filePath,
+      fileName: uploadResult.fileName,
+      fileSize: uploadResult.fileSize,
+      publicUrl: uploadResult.publicUrl,
     });
   } catch (error: any) {
     console.error("Upload error:", error);

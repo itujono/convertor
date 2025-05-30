@@ -27,8 +27,14 @@ import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
-import { convertHandler } from "./handlers/conversion";
+import { convertHandler, checkBatchLimitHandler } from "./handlers/conversion";
 import { downloadHandler, downloadZipHandler } from "./handlers/download";
+import {
+  getUserFilesHandler,
+  markFileDownloadedHandler,
+  deleteUserFileHandler,
+  cleanupExpiredFilesHandler,
+} from "./handlers/user-files";
 import { healthHandler } from "./handlers/health";
 import {
   createCheckoutSession,
@@ -64,25 +70,53 @@ app.use(
   })
 );
 
-// Webhook endpoint (no auth required)
 app.post("/webhooks/stripe", handleStripeWebhook);
 
-// Apply auth middleware to API routes
+app.get("/api/debug/conversion-setup", async (c) => {
+  try {
+    const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+    const fs = await import("fs").then((m) => m.promises);
+
+    const checks = {
+      ffmpegPath: ffmpegInstaller.path,
+      ffmpegExists: await fs
+        .access(ffmpegInstaller.path)
+        .then(() => true)
+        .catch(() => false),
+      awsRegion: process.env.AWS_REGION,
+      awsBucket: process.env.AWS_S3_BUCKET,
+      awsAccessKey: process.env.AWS_ACCESS_KEY_ID ? "Set" : "Missing",
+      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY ? "Set" : "Missing",
+      cloudfront: process.env.AWS_CLOUDFRONT_DOMAIN || "Not set",
+    };
+
+    return c.json({ checks });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 app.use("/api/*", authMiddleware);
 
-// API routes
 app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
 app.post("/api/convert", convertHandler);
+app.post("/api/check-batch-limit", checkBatchLimitHandler);
 app.get("/api/download/:filename", downloadHandler);
 app.post("/api/download/zip", downloadZipHandler);
 
-// Subscription routes
+// User files management
+app.get("/api/user-files", getUserFilesHandler);
+app.post("/api/user-files/mark-downloaded", markFileDownloadedHandler);
+app.delete("/api/user-files/:fileId", deleteUserFileHandler);
+
 app.post("/api/subscription/checkout", createCheckoutSession);
 app.get("/api/subscription", getUserSubscription);
 app.post("/api/subscription/cancel", cancelSubscription);
 
-// Health check
+// Cleanup endpoint (can be called by cron job)
+app.post("/api/cleanup/expired-files", cleanupExpiredFilesHandler);
+
 app.get("/health", healthHandler);
 
 export default app;

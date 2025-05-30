@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "./supabase";
 
-export async function checkConversionLimit(userId: string) {
+export async function checkConversionLimit(
+  userId: string,
+  fileCount: number = 1
+) {
   const { data: userData, error } = await supabaseAdmin
     .from("users")
     .select("*")
@@ -29,13 +32,37 @@ export async function checkConversionLimit(userId: string) {
     userData.conversion_count = 0;
   }
 
-  if (userData.plan === "free" && userData.conversion_count >= 10) {
+  const dailyLimit = userData.plan === "free" ? 10 : 100;
+  const remainingConversions = dailyLimit - userData.conversion_count;
+
+  if (userData.conversion_count >= dailyLimit) {
     throw new Error(
-      "Daily conversion limit reached. Upgrade to premium for unlimited conversions."
+      `Daily conversion limit reached. ${
+        userData.plan === "free"
+          ? "Upgrade to premium for more conversions."
+          : "Please try again tomorrow."
+      }`
+    );
+  }
+
+  if (fileCount > remainingConversions) {
+    throw new Error(
+      `Not enough conversions remaining. You have ${remainingConversions} conversion${
+        remainingConversions === 1 ? "" : "s"
+      } left today, but trying to convert ${fileCount} file${
+        fileCount === 1 ? "" : "s"
+      }.`
     );
   }
 
   return userData;
+}
+
+export async function checkBatchConversionLimit(
+  userId: string,
+  fileCount: number
+) {
+  return checkConversionLimit(userId, fileCount);
 }
 
 export async function incrementConversionCount(userId: string) {

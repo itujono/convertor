@@ -24,6 +24,23 @@ export interface Conversion {
   created_at?: string;
 }
 
+export interface UserFile {
+  id: string;
+  user_id: string;
+  original_file_name: string;
+  converted_file_name: string;
+  original_format: string;
+  converted_format: string;
+  file_path: string; // S3 path
+  download_url: string; // Signed URL (will be regenerated)
+  file_size: number;
+  quality: string;
+  status: "ready" | "expired" | "downloaded";
+  expires_at: string;
+  created_at: string;
+  last_downloaded_at?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -36,6 +53,11 @@ export interface Database {
         Row: Conversion;
         Insert: Omit<Conversion, "id" | "created_at">;
         Update: Partial<Omit<Conversion, "id" | "created_at">>;
+      };
+      user_files: {
+        Row: UserFile;
+        Insert: Omit<UserFile, "id" | "created_at">;
+        Update: Partial<Omit<UserFile, "id" | "created_at">>;
       };
     };
     Views: {};

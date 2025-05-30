@@ -22,6 +22,13 @@ BETTER_AUTH_SECRET="your-secret-key-here-make-it-long-and-random"
 # Google OAuth (required for social sign-in)
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
+
+# AWS S3 & CloudFront (required for file storage)
+AWS_REGION="us-east-1"
+AWS_ACCESS_KEY_ID="your-aws-access-key-id"
+AWS_SECRET_ACCESS_KEY="your-aws-secret-access-key"
+AWS_S3_BUCKET="your-s3-bucket-name"
+AWS_CLOUDFRONT_DOMAIN="your-cloudfront-domain.cloudfront.net"  # Optional, improves performance
 ```
 
 3. Set up Google OAuth:
@@ -35,7 +42,14 @@ GOOGLE_CLIENT_SECRET="your-google-client-secret"
      - `http://localhost:3001/auth/callback/google` (development)
      - `https://yourdomain.com/auth/callback/google` (production)
 
-4. Run database migrations:
+4. Set up AWS S3 & CloudFront:
+
+   - Create an S3 bucket for file storage
+   - Create a CloudFront distribution pointing to your S3 bucket (optional but recommended)
+   - Create an IAM user with S3 permissions and get access keys
+   - Required S3 permissions: `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`
+
+5. Run database migrations:
 
 ```bash
 # From the project root
