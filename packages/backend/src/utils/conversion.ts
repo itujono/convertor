@@ -12,7 +12,11 @@ export async function checkConversionLimit(userId: string) {
   const now = new Date();
   const lastReset = new Date(userData.last_reset || Date.now());
 
-  if (now.getMonth() !== lastReset.getMonth()) {
+  // Check if it's a new day (daily reset)
+  const nowDate = now.toDateString();
+  const lastResetDate = lastReset.toDateString();
+
+  if (nowDate !== lastResetDate) {
     const { error: updateError } = await supabaseAdmin
       .from("users")
       .update({
@@ -25,9 +29,9 @@ export async function checkConversionLimit(userId: string) {
     userData.conversion_count = 0;
   }
 
-  if (userData.plan === "free" && userData.conversion_count >= 5) {
+  if (userData.plan === "free" && userData.conversion_count >= 10) {
     throw new Error(
-      "Monthly conversion limit reached. Upgrade to premium for unlimited conversions."
+      "Daily conversion limit reached. Upgrade to premium for unlimited conversions."
     );
   }
 

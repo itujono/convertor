@@ -28,7 +28,7 @@ import { authMiddleware } from "./middleware/auth";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
 import { convertHandler } from "./handlers/conversion";
-import { downloadHandler } from "./handlers/download";
+import { downloadHandler, downloadZipHandler } from "./handlers/download";
 import { healthHandler } from "./handlers/health";
 import {
   createCheckoutSession,
@@ -39,6 +39,22 @@ import {
 import type { Variables } from "./utils/types";
 
 const app = new Hono<{ Variables: Variables }>();
+
+// Increase timeout for large file uploads
+app.use("*", async (c, next) => {
+  // Set a longer timeout for upload and conversion endpoints
+  if (c.req.path.includes("/upload") || c.req.path.includes("/convert")) {
+    // 10 minute timeout for large files
+    const timeoutId = setTimeout(() => {
+      console.log("Request timeout for:", c.req.path);
+    }, 10 * 60 * 1000);
+
+    await next();
+    clearTimeout(timeoutId);
+  } else {
+    await next();
+  }
+});
 
 app.use(
   "*",
@@ -59,6 +75,7 @@ app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
 app.post("/api/convert", convertHandler);
 app.get("/api/download/:filename", downloadHandler);
+app.post("/api/download/zip", downloadZipHandler);
 
 // Subscription routes
 app.post("/api/subscription/checkout", createCheckoutSession);

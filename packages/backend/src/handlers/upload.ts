@@ -1,5 +1,6 @@
 import { Context } from "hono";
 import { join } from "path";
+import { mkdir } from "fs/promises";
 import { checkConversionLimit } from "../utils/conversion";
 import type { Variables } from "../utils/types";
 
@@ -8,6 +9,8 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
     const user = c.get("user");
     await checkConversionLimit(user.id);
 
+    console.log("Starting file upload for user:", user.id);
+
     const body = await c.req.parseBody();
     const file = body.file as File;
 
@@ -15,11 +18,19 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
       return c.json({ error: "No file uploaded" }, 400);
     }
 
+    console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+
     const fileName = file.name;
     const uploadsDir = join(process.cwd(), "uploads");
+
+    // Ensure uploads directory exists
+    await mkdir(uploadsDir, { recursive: true });
+
     const filePath = join(uploadsDir, fileName);
 
+    console.log("Writing file to:", filePath);
     await Bun.write(filePath, file);
+    console.log("File upload completed successfully");
 
     return c.json({
       message: "File uploaded successfully",

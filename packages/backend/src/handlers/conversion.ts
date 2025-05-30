@@ -1,13 +1,15 @@
 import { Context } from "hono";
 import { join } from "path";
-import * as ffmpeg from "fluent-ffmpeg";
-import * as ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
+import { mkdir } from "fs/promises";
 import {
   checkConversionLimit,
   incrementConversionCount,
 } from "../utils/conversion";
 import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
+
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -22,9 +24,14 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     await checkConversionLimit(user.id);
 
-    const inputPath = join(process.cwd(), "uploads", filePath);
+    const uploadsDir = join(process.cwd(), "uploads");
+
+    // Ensure uploads directory exists
+    await mkdir(uploadsDir, { recursive: true });
+
+    const inputPath = join(uploadsDir, filePath);
     const outputFileName = `${filePath.split(".")[0]}_converted.${format}`;
-    const outputPath = join(process.cwd(), "uploads", outputFileName);
+    const outputPath = join(uploadsDir, outputFileName);
 
     const { error: conversionError } = await supabaseAdmin
       .from("conversions")
