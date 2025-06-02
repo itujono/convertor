@@ -19,49 +19,16 @@ export async function getUserHandler(c: Context<{ Variables: Variables }>) {
       return c.json({ error: "Invalid token" }, 401);
     }
 
-    let { data: userData, error: userError } = await supabaseAdmin
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (userError && userError.code === "PGRST116") {
-      const { data: newUser, error: insertError } = await supabaseAdmin
-        .from("users")
-        .insert({
-          id: user.id,
-          plan: "free",
-          conversion_count: 0,
-          last_reset: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error("Error creating user:", insertError);
-        return c.json({ error: "Internal server error" }, 500);
-      }
-
-      return c.json({
-        id: user.id,
-        email: user.email!,
-        name: user.user_metadata?.full_name || user.email!,
-        plan: "free",
-        conversionCount: 0,
-        lastReset: new Date().toISOString(),
-      });
-    } else if (userError) {
-      console.error("Error fetching user:", userError);
-      return c.json({ error: "Internal server error" }, 500);
-    }
+    // Get user data from middleware (which handles user creation if needed)
+    const userData = c.get("user");
 
     return c.json({
       id: user.id,
       email: user.email!,
       name: user.user_metadata?.full_name || user.email!,
-      plan: userData!.plan,
-      conversionCount: userData!.conversion_count,
-      lastReset: userData!.last_reset,
+      plan: userData.plan,
+      conversionCount: userData.conversionCount,
+      lastReset: userData.lastReset.toISOString(),
     });
   } catch (error) {
     console.error("Error in /api/user endpoint:", error);

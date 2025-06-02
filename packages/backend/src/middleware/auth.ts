@@ -33,23 +33,46 @@ export async function authMiddleware(
     .single();
 
   if (userError && userError.code === "PGRST116") {
+    // Try to create user, but handle potential race condition
     const { data: newUser, error: insertError } = await supabaseAdmin
       .from("users")
-      .insert({
-        id: user.id,
-        plan: "free",
-        conversion_count: 0,
-        last_reset: new Date().toISOString(),
-      })
+      .upsert(
+        {
+          id: user.id,
+          plan: "free",
+          conversion_count: 0,
+          last_reset: new Date().toISOString(),
+        },
+        {
+          onConflict: "id",
+          ignoreDuplicates: false,
+        }
+      )
       .select()
       .single();
 
     if (insertError) {
-      console.error("Error creating user:", insertError);
-      return c.json({ error: "Internal server error" }, 500);
-    }
+      // If it's still a duplicate key error, try to fetch the existing user
+      if (insertError.code === "23505") {
+        console.log("User already exists, fetching existing user data");
+        const { data: existingUser, error: fetchError } = await supabaseAdmin
+          .from("users")
+          .select("*")
+          .eq("id", user.id)
+          .single();
 
-    userData = newUser;
+        if (fetchError) {
+          console.error("Error fetching existing user:", fetchError);
+          return c.json({ error: "Internal server error" }, 500);
+        }
+        userData = existingUser;
+      } else {
+        console.error("Error creating user:", insertError);
+        return c.json({ error: "Internal server error" }, 500);
+      }
+    } else {
+      userData = newUser;
+    }
   } else if (userError) {
     console.error("Error fetching user:", userError);
     return c.json({ error: "Internal server error" }, 500);

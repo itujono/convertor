@@ -102,9 +102,7 @@ export default function UploadWithProgress() {
 
   const UpgradeButton = () => (
     <PricingModal>
-      <button disabled className="text-sm hover:text-primary/80 hover:underline text-primary">
-        Upgrade?
-      </button>
+      <button className="text-sm hover:text-primary/80 hover:underline text-primary">Upgrade?</button>
     </PricingModal>
   );
 

@@ -116,8 +116,9 @@ export function PricingModal({ children }: PricingModalProps) {
           </div>
         </RadioGroup>
 
-        <Button className="w-full mb-4" onClick={handlePlanSelect} disabled={isLoading}>
-          {isLoading ? "Processing..." : `Choose ${selectedPlan === "monthly" ? "Monthly" : "Yearly"} Plan`}
+        <Button disabled className="w-full mb-4" onClick={handlePlanSelect}>
+          Disabled for now
+          {/* {isLoading ? "Processing..." : `Choose ${selectedPlan === "monthly" ? "Monthly" : "Yearly"} Plan`} */}
         </Button>
 
         <div className="space-y-2">
