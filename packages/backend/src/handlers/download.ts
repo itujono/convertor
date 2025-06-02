@@ -16,10 +16,8 @@ export async function downloadHandler(c: Context<{ Variables: Variables }>) {
   try {
     const filename = c.req.param("filename");
 
-    // Create signed download URL for the file
     const { signedUrl } = await createSignedDownloadUrl(filename, 300); // 5 minutes
 
-    // Redirect to the signed URL
     return c.redirect(signedUrl);
   } catch (error) {
     console.error("Download error:", error);
@@ -48,7 +46,6 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
     const zipFileName = `converted_files_${Date.now()}.zip`;
     tempZipPath = join(tempDir, zipFileName);
 
-    // Create zip archive
     await new Promise<void>((resolve, reject) => {
       const output = createWriteStream(tempZipPath!);
       const archive = archiver("zip", { zlib: { level: 9 } });
@@ -61,7 +58,6 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
 
       archive.pipe(output);
 
-      // Download each file from S3 and add to archive
       const downloadPromises = filePaths.map(async (filePath: string) => {
         try {
           const fileBuffer = await downloadFile(filePath);
@@ -79,7 +75,6 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
         .catch(reject);
     });
 
-    // Upload zip file to S3
     const zipBuffer = await Bun.file(tempZipPath).arrayBuffer();
     const uploadResult = await uploadFile(
       new Uint8Array(zipBuffer),
@@ -88,13 +83,11 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
       "application/zip"
     );
 
-    // Create signed download URL for the zip
     const { signedUrl } = await createSignedDownloadUrl(
       uploadResult.filePath,
       600
     ); // 10 minutes
 
-    // Schedule cleanup of zip file after 10 minutes
     scheduleFileCleanup([uploadResult.filePath], 10 * 60 * 1000);
 
     console.log("Zip file created and uploaded successfully");
@@ -109,7 +102,6 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
     console.error("Zip download error:", error);
     return c.json({ error: "Zip download failed" }, 500);
   } finally {
-    // Clean up temporary zip file
     if (tempZipPath) {
       try {
         await unlink(tempZipPath);

@@ -55,13 +55,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     const user = c.get("user");
     const { filePath, format, quality = "medium" } = await c.req.json();
 
-    console.log("🔄 CONVERSION START:", {
-      userId: user.id,
-      filePath,
-      format,
-      quality,
-    });
-
     if (!filePath || !format) {
       return c.json({ error: "Missing filePath or format" }, 400);
     }
@@ -73,18 +66,15 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       `Starting conversion for user ${user.id}: ${filePath} -> ${format} (${quality})`
     );
 
-    // Create temporary directory for processing
     const tempDir = join(process.cwd(), "temp");
     console.log("📁 Creating temp directory:", tempDir);
     await mkdir(tempDir, { recursive: true });
     console.log("✅ Temp directory created");
 
-    // Download file from S3
     console.log("⬇️ Starting S3 download for:", filePath);
     const fileBuffer = await downloadFile(filePath);
     console.log("✅ S3 download completed, buffer size:", fileBuffer.length);
 
-    // Create temporary input file
     const originalFileName = filePath.split("/").pop() || "file";
     const baseName = originalFileName.split(".")[0];
     const fileExtension = originalFileName.split(".").pop()?.toLowerCase();
@@ -98,13 +88,11 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     await Bun.write(tempInputPath, fileBuffer);
     console.log("✅ Temp input file written");
 
-    // Check if this is an SVG file
     const isSvgFile = fileExtension === "svg";
 
     if (isSvgFile) {
       console.log("🎨 Detected SVG file, using special handling");
 
-      // For SVG files, we need to use a different approach
       if (!["png", "jpg", "jpeg", "webp"].includes(format.toLowerCase())) {
         throw new Error(
           "SVG files can only be converted to PNG, JPG, JPEG, or WebP formats"
@@ -141,7 +129,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       }
     }
 
-    // Log conversion start
     console.log("💾 Logging conversion to database");
     const { error: conversionError } = await supabaseAdmin
       .from("conversions")
@@ -157,14 +144,11 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       console.log("✅ Conversion logged to database");
     }
 
-    // Check FFmpeg path
     console.log("🎬 FFmpeg path:", ffmpegInstaller.path);
 
-    // Perform conversion with quality settings
     console.log("🔄 Starting conversion...");
 
     if (isSvgFile) {
-      // Handle SVG conversion using Sharp library
       console.log("🎨 Converting SVG file using Sharp library");
 
       try {
@@ -173,10 +157,8 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
           throw new Error("SVG conversion timeout");
         }, 5 * 60 * 1000);
 
-        // Use Sharp to convert SVG to raster format
         let sharpInstance = sharp(tempInputPath);
 
-        // Apply quality settings for Sharp
         if (format.toLowerCase() === "jpg" || format.toLowerCase() === "jpeg") {
           const jpegQuality =
             quality === "low" ? 60 : quality === "high" ? 95 : 80;
@@ -190,7 +172,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
           sharpInstance = sharpInstance.webp({ quality: webpQuality });
         }
 
-        // Convert and save
         await sharpInstance.toFile(tempOutputPath);
 
         clearTimeout(conversionTimeout);
@@ -200,15 +181,12 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         throw new Error(`SVG conversion failed: ${svgError.message}`);
       }
     } else {
-      // Regular FFmpeg conversion for non-SVG files
       await new Promise((resolve, reject) => {
         let command = ffmpeg(tempInputPath).output(tempOutputPath);
 
-        // Apply quality settings based on format and quality level
         command = applyQualitySettings(command, format, quality);
         console.log("⚙️ Quality settings applied");
 
-        // Add timeout for conversion (5 minutes)
         const conversionTimeout = setTimeout(() => {
           console.error("❌ FFmpeg conversion timeout after 5 minutes");
           reject(
@@ -238,7 +216,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     }
 
     console.log("⬆️ Starting S3 upload of converted file");
-    // Upload converted file to S3
     const uploadResult = await uploadConvertedFile(
       tempOutputPath,
       user.id,
@@ -247,7 +224,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     );
     console.log("✅ S3 upload completed:", uploadResult.filePath);
 
-    // Create signed download URL (valid for 5 minutes)
     console.log("🔗 Creating signed download URL");
     const { signedUrl } = await createSignedDownloadUrl(
       uploadResult.filePath,
@@ -255,7 +231,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     );
     console.log("✅ Signed URL created");
 
-    // Save to user_files table for persistent access
     console.log("💾 Saving to user_files table");
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours from now
@@ -287,7 +262,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     // Schedule cleanup of converted file after 24 hours (matching database expiration)
     scheduleFileCleanup([uploadResult.filePath], 24 * 60 * 60 * 1000);
 
-    // Update conversion status
     console.log("📝 Updating conversion status to completed");
     const { error: updateError } = await supabaseAdmin
       .from("conversions")
@@ -315,7 +289,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
   } catch (error: any) {
     console.error("💥 CONVERSION ERROR:", error);
 
-    // Update conversion status to failed
     try {
       const { filePath } = await c.req.json().catch(() => ({}));
       if (filePath) {
@@ -334,7 +307,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     return c.json({ error: error.message || "Conversion failed" }, 500);
   } finally {
-    // Clean up temporary files
     try {
       if (tempInputPath) {
         await unlink(tempInputPath);
@@ -348,9 +320,6 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
   }
 }
 
-/**
- * Apply quality settings to FFmpeg command based on format and quality level
- */
 function applyQualitySettings(
   command: any,
   format: string,

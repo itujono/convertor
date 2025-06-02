@@ -21,7 +21,6 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
       `Uploading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
     );
 
-    // Upload file to AWS S3
     const uploadResult = await uploadFile(file, file.name, user.id, file.type);
 
     console.log("File uploaded to S3 successfully:", uploadResult.filePath);

@@ -16,9 +16,6 @@ bun install
 # Database
 DATABASE_URL="postgresql://username:password@localhost:5432/convertor"
 
-# Better Auth
-BETTER_AUTH_SECRET="your-secret-key-here-make-it-long-and-random"
-
 # Google OAuth (required for social sign-in)
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
@@ -82,8 +79,6 @@ bun run dev
 - `/auth/*` - Authentication endpoints (includes Google OAuth)
 
 ## Authentication
-
-The backend supports both email/password and Google OAuth authentication:
 
 ### Email/Password
 
