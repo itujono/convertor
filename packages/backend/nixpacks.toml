@@ -1,0 +1,14 @@
+[providers]
+node = "20"
+
+[phases.setup]
+nixPkgs = ["bun", "ffmpeg"]
+
+[phases.install]
+cmd = "bun install"
+
+[phases.build]
+cmd = "echo 'Build complete'"
+
+[start]
+cmd = "bun run src/index.ts" 

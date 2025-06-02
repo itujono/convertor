@@ -65,7 +65,9 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:3000"],
+    origin: process.env.FRONTEND_URL
+      ? [process.env.FRONTEND_URL, "http://localhost:3000"]
+      : ["http://localhost:3000"],
     credentials: true,
   })
 );
@@ -119,4 +121,11 @@ app.post("/api/cleanup/expired-files", cleanupExpiredFilesHandler);
 
 app.get("/health", healthHandler);
 
-export default app;
+// Start the server
+const port = process.env.PORT || 3001;
+console.log(`🚀 Server starting on port ${port}`);
+
+export default {
+  port,
+  fetch: app.fetch,
+};
