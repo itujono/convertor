@@ -1,8 +1,11 @@
+[providers]
+node = false
+
 [phases.setup]
 nixPkgs = ["bun", "ffmpeg"]
 
 [phases.install]
-cmd = "bun install"
+cmd = "bun install --frozen-lockfile"
 
 [phases.build]
 cmd = "echo 'Build complete'"
