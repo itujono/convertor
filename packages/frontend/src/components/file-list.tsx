@@ -1,3 +1,5 @@
+"use client";
+
 import { Trash2Icon, UploadIcon, XIcon, DownloadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type FileWithPreview, formatBytes } from "@/hooks/use-file-upload";
@@ -7,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { getAvailableFormats, getFileIconType } from "@/lib/file-formats";
 import { useId } from "react";
+import Image from "next/image";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 
 interface FileListProps {
   files: FileWithPreview[];
@@ -99,6 +104,10 @@ export function FileCard({
   const isProcessing = fileProgress && (isUploading || fileProgress.converting);
   const isCompleted = fileProgress && fileProgress.converted;
 
+  // Check if the file is an image
+  const fileType = file.file instanceof File ? file.file.type : file.file.type;
+  const isImage = fileType.startsWith("image/");
+
   return (
     <div
       data-uploading={isUploading || undefined}
@@ -106,8 +115,13 @@ export function FileCard({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 overflow-hidden in-data-[uploading=true]:opacity-50 min-w-0 flex-1">
-          <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded border">
-            <FileIcon file={file} />
+          <div
+            className={cn(
+              "flex aspect-square size-10 shrink-0 items-center justify-center rounded overflow-hidden",
+              isImage ? "border-none" : "border",
+            )}
+          >
+            {isImage && file.preview ? <ImageQuickPreview file={file} /> : <FileIcon file={file} />}
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">
             <p className="truncate text-[13px] font-medium">
@@ -274,4 +288,32 @@ interface FileIconProps {
 export function FileIcon({ file }: FileIconProps) {
   const { icon: IconComponent } = getFileIconType(file);
   return <IconComponent className="size-4 opacity-60" />;
+}
+
+function ImageQuickPreview({ file }: { file: FileWithPreview }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild className="cursor-pointer">
+        <Image
+          width={40}
+          height={40}
+          src={file.preview}
+          alt={file.file instanceof File ? file.file.name : file.file.name}
+          className="size-full object-contain rounded"
+        />
+      </DialogTrigger>
+      <DialogContent className="max-w-screen-md p-0 pt-8">
+        <DialogHeader>
+          <DialogTitle className="sr-only">{file.file instanceof File ? file.file.name : file.file.name}</DialogTitle>
+        </DialogHeader>
+        <Image
+          width={260}
+          height={260}
+          src={file.preview}
+          alt={file.file instanceof File ? file.file.name : file.file.name}
+          className="size-full object-contain"
+        />
+      </DialogContent>
+    </Dialog>
+  );
 }

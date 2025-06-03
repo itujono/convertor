@@ -40,14 +40,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session]);
 
-  // Extract Google user data from session
   const extractGoogleUserData = (session: Session | null) => {
     if (session?.user?.user_metadata) {
       const metadata = session.user.user_metadata;
-      console.log("Google user metadata:", metadata); // Debug log
+
+      const avatarUrl =
+        metadata.avatar_url || metadata.picture || metadata.photo || metadata.image_url || metadata.profile_picture;
+
+      const fullName =
+        metadata.full_name ||
+        metadata.name ||
+        metadata.display_name ||
+        `${metadata.given_name || ""} ${metadata.family_name || ""}`.trim();
+
       return {
-        avatar_url: metadata.avatar_url || metadata.picture,
-        full_name: metadata.full_name || metadata.name,
+        avatar_url: avatarUrl,
+        full_name: fullName,
       };
     }
     return null;
@@ -55,9 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      console.log("=== Google Sign In Debug ===");
-      console.log("Window origin:", window.location.origin);
-
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -67,8 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       });
-
-      console.log("signInWithOAuth response:", { data, error });
 
       if (error) {
         console.error("Google sign in error:", error);
@@ -97,13 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     const handleAuthChange = async (event: string, session: Session | null) => {
-      console.log("Auth state changed:", event);
-
       if (!isMounted) return;
 
       setSession(session);
 
-      // Extract Google user data
       const googleUserData = extractGoogleUserData(session);
       setGoogleUser(googleUserData);
 
@@ -179,4 +179,8 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+export function ClientAuthProvider({ children }: { children: React.ReactNode }) {
+  return <AuthProvider>{children}</AuthProvider>;
 }

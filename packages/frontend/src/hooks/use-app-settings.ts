@@ -29,45 +29,38 @@ interface User {
 }
 
 export interface AppSettingsContext {
-  // User & Auth
   user: User | null;
   isAuthenticated: boolean;
   userPlan: UserPlan;
   planLimits: PlanLimits;
 
-  // Plan Features
   canUseResumableUploads: boolean;
   canUsePriorityProcessing: boolean;
   canUseApiAccess: boolean;
   canUseCustomWatermarks: boolean;
   canUseAdvancedSettings: boolean;
 
-  // File Upload Validation
   validateFile: (file: File) => { isValid: boolean; error?: string };
   validateFileCount: (currentCount: number) => { isValid: boolean; error?: string };
   validateConversionCount: (conversionCount: number) => { isValid: boolean; error?: string };
   getMaxFileSize: () => number;
   getMaxFiles: () => number;
 
-  // Usage & Quotas
   canConvertMore: () => boolean;
   getRemainingConversions: () => { daily: number; monthly: number };
   getUsagePercentage: () => { daily: number; monthly: number; storage: number };
 
-  // UI Helpers
   shouldShowUpgrade: boolean;
   shouldShowUsageStats: boolean;
   getPlanFeaturesList: () => string[];
   formatPlanName: () => string;
 
-  // Settings
   settings: typeof AppSettings;
 }
 
 export function useAppSettings(): AppSettingsContext {
   const { user: authUser, session } = useAuth();
 
-  // Convert auth user to app settings user format
   const user: User | null = authUser
     ? {
         id: authUser.id,
@@ -75,7 +68,7 @@ export function useAppSettings(): AppSettingsContext {
         plan: authUser.plan as UserPlan,
         isAuthenticated: !!session,
         usage: {
-          conversionsToday: authUser.conversionCount || 0, // You might want to track daily vs total separately
+          conversionsToday: authUser.conversionCount || 0, // Might want to track daily vs total separately
           conversionsThisMonth: authUser.conversionCount || 0,
           storageUsedGB: 0, // TODO: Implement storage tracking
         },
@@ -88,7 +81,6 @@ export function useAppSettings(): AppSettingsContext {
 
   const context = useMemo((): AppSettingsContext => {
     const validateFile = (file: File) => {
-      // Check if login is required
       if (AppSettings.auth.requiresLogin && !isAuthenticated) {
         return { isValid: false, error: "Please log in to upload files" };
       }

@@ -137,6 +137,8 @@ class ApiClient {
   }
 
   async downloadZip(fileNames: string[]) {
+    console.log("Downloading zip with file paths:", fileNames);
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -161,6 +163,8 @@ class ApiClient {
     }
 
     const blob = await response.blob();
+    console.log("Received zip blob size:", blob.size, "bytes");
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

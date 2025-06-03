@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownIcon, HeartIcon, InfoIcon } from "lucide-react";
@@ -50,7 +52,7 @@ export default function Hero() {
                     <InfoIcon className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent className="bg-black text-white" arrowClassName="fill-black">
-                    Joke! We've just launched yesterday 😅
+                    Joke! We&apos;ve just launched yesterday 😅
                   </TooltipContent>
                 </Tooltip>
               </div>

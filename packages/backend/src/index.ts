@@ -1,33 +1,37 @@
 // Load environment variables first
-import { readFileSync } from "fs";
-import { join } from "path";
+// import { readFileSync } from "fs";
+// import { join } from "path";
 
 // Load .env file manually for Bun
-try {
-  const envPath = join(process.cwd(), ".env");
-  const envFile = readFileSync(envPath, "utf8");
+// try {
+//   const envPath = join(process.cwd(), ".env");
+//   const envFile = readFileSync(envPath, "utf8");
 
-  envFile.split("\n").forEach((line) => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith("#")) {
-      const [key, ...valueParts] = trimmed.split("=");
-      if (key && valueParts.length > 0) {
-        const value = valueParts.join("=");
-        process.env[key.trim()] = value.trim();
-      }
-    }
-  });
-  console.log("✅ Environment variables loaded");
-} catch (error) {
-  console.warn("⚠️ Could not load .env file:", error);
-}
+//   envFile.split("\n").forEach((line) => {
+//     const trimmed = line.trim();
+//     if (trimmed && !trimmed.startsWith("#")) {
+//       const [key, ...valueParts] = trimmed.split("=");
+//       if (key && valueParts.length > 0) {
+//         const value = valueParts.join("=");
+//         process.env[key.trim()] = value.trim();
+//       }
+//     }
+//   });
+//   console.log("✅ Environment variables loaded");
+// } catch (error) {
+//   console.warn("⚠️ Could not load .env file:", error);
+// }
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
-import { convertHandler, checkBatchLimitHandler } from "./handlers/conversion";
+import {
+  convertHandler,
+  checkBatchLimitHandler,
+  getConversionProgressHandler,
+} from "./handlers/conversion";
 import { downloadHandler, downloadZipHandler } from "./handlers/download";
 import {
   getUserFilesHandler,
@@ -103,6 +107,7 @@ app.use("/api/*", authMiddleware);
 app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
 app.post("/api/convert", convertHandler);
+app.get("/api/convert/progress/*", getConversionProgressHandler);
 app.post("/api/check-batch-limit", checkBatchLimitHandler);
 app.get("/api/download/:filename", downloadHandler);
 app.post("/api/download/zip", downloadZipHandler);

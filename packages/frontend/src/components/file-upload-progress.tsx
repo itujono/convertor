@@ -34,10 +34,15 @@ export function FileUploadProgress({ fileProgress, onAbort }: FileUploadProgress
   }
 
   if (converting) {
+    const conversionProgress = fileProgress.conversionProgress || 0;
+
     return (
-      <div className="mt-1 flex items-center gap-2 text-[#488a60]">
-        <LoaderIcon className="size-3 animate-spin" />
-        <span className="text-xs">Converting...</span>
+      <div className="mt-1 space-y-1">
+        <div className="flex items-center gap-2 text-[#488a60]">
+          <LoaderIcon className="size-3 animate-spin" />
+          <span className="text-xs">Converting... {conversionProgress}%</span>
+        </div>
+        {conversionProgress > 0 && <Progress value={conversionProgress} className="h-1.5" />}
       </div>
     );
   }

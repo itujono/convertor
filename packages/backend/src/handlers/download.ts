@@ -37,8 +37,9 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
     }
 
     console.log(
-      `Creating zip for user ${user.id} with ${filePaths.length} files`
+      `Creating zip for user ${user.id} with ${filePaths.length} files:`
     );
+    console.log("File paths:", filePaths);
 
     const tempDir = join(process.cwd(), "temp");
     await mkdir(tempDir, { recursive: true });
@@ -46,7 +47,7 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
     const zipFileName = `converted_files_${Date.now()}.zip`;
     tempZipPath = join(tempDir, zipFileName);
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>(async (resolve, reject) => {
       const output = createWriteStream(tempZipPath!);
       const archive = archiver("zip", { zlib: { level: 9 } });
 
@@ -58,46 +59,44 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
 
       archive.pipe(output);
 
-      const downloadPromises = filePaths.map(async (filePath: string) => {
+      // Download and append files sequentially to avoid race conditions
+      let successfulFiles = 0;
+      for (const filePath of filePaths) {
         try {
+          console.log(`Downloading file: ${filePath}`);
           const fileBuffer = await downloadFile(filePath);
           const fileName = filePath.split("/").pop() || "file";
+
+          console.log(
+            `Adding file to zip: ${fileName} (${fileBuffer.length} bytes)`
+          );
           archive.append(fileBuffer, { name: fileName });
+          successfulFiles++;
         } catch (error) {
           console.warn(`Could not add file ${filePath} to zip:`, error);
         }
-      });
+      }
 
-      Promise.all(downloadPromises)
-        .then(() => {
-          archive.finalize();
-        })
-        .catch(reject);
+      console.log(
+        `Successfully added ${successfulFiles}/${filePaths.length} files to zip`
+      );
+
+      archive.finalize();
     });
+
+    const zipStats = await Bun.file(tempZipPath).size;
+    console.log(`Local zip file size: ${zipStats} bytes`);
 
     const zipBuffer = await Bun.file(tempZipPath).arrayBuffer();
-    const uploadResult = await uploadFile(
-      new Uint8Array(zipBuffer),
-      zipFileName,
-      user.id,
-      "application/zip"
-    );
+    console.log(`Streaming zip buffer size: ${zipBuffer.byteLength} bytes`);
 
-    const { signedUrl } = await createSignedDownloadUrl(
-      uploadResult.filePath,
-      600
-    ); // 10 minutes
+    console.log("Streaming zip file directly to client");
 
-    scheduleFileCleanup([uploadResult.filePath], 10 * 60 * 1000);
+    c.header("Content-Type", "application/zip");
+    c.header("Content-Disposition", `attachment; filename="${zipFileName}"`);
+    c.header("Content-Length", zipBuffer.byteLength.toString());
 
-    console.log("Zip file created and uploaded successfully");
-
-    return c.json({
-      message: "Zip file created successfully",
-      downloadUrl: signedUrl,
-      fileName: zipFileName,
-      fileSize: uploadResult.fileSize,
-    });
+    return c.body(new Uint8Array(zipBuffer));
   } catch (error) {
     console.error("Zip download error:", error);
     return c.json({ error: "Zip download failed" }, 500);

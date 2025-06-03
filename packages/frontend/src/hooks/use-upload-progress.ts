@@ -12,6 +12,8 @@ export interface UploadProgress {
   converted?: boolean;
   downloadUrl?: string;
   convertedFileName?: string;
+  convertedFilePath?: string;
+  conversionProgress?: number;
   error?: string;
 }
 
@@ -63,19 +65,68 @@ const convertFile = async (
   filePath: string,
   format: string,
   quality: string,
-  onComplete: (downloadUrl: string) => void,
+  onComplete: (downloadUrl: string, outputPath: string) => void,
   onError: (error: string) => void,
+  onProgress: (progress: number) => void,
   abortSignal?: AbortSignal,
 ) => {
   try {
     if (abortSignal?.aborted) return;
 
+    // Start polling for progress
+    const progressInterval = setInterval(async () => {
+      if (abortSignal?.aborted) {
+        clearInterval(progressInterval);
+        return;
+      }
+
+      try {
+        // URL encode the file path for the API call
+        const encodedFilePath = encodeURIComponent(filePath);
+        const progressUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/convert/progress/${encodedFilePath}`;
+
+        const response = await fetch(progressUrl, {
+          headers: await getAuthHeaders(),
+        });
+
+        if (response.ok) {
+          const progressData = await response.json();
+          if (progressData.progress !== undefined) {
+            onProgress(progressData.progress);
+          }
+        }
+      } catch (error) {
+        // Ignore progress polling errors
+      }
+    }, 1000); // Poll every second
+
     const response = await apiClient.convertFile(filePath, format, quality);
-    onComplete(response.downloadUrl);
+
+    clearInterval(progressInterval);
+    onComplete(response.downloadUrl, response.outputPath);
   } catch (error) {
     onError(error instanceof Error ? error.message : "Conversion failed");
   }
 };
+
+// Helper function to get auth headers (similar to ApiClient)
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const { supabase } = await import("@/lib/auth-client");
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session?.access_token) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    };
+  }
+
+  return {
+    "Content-Type": "application/json",
+  };
+}
 
 export function useUploadProgress() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
@@ -158,7 +209,7 @@ export function useUploadProgress() {
               filePath,
               targetFormat,
               targetQuality,
-              (downloadUrl) => {
+              (downloadUrl, outputPath) => {
                 const fullDownloadUrl = downloadUrl.startsWith("/")
                   ? `${process.env.NEXT_PUBLIC_BACKEND_URL}${downloadUrl}`
                   : downloadUrl;
@@ -171,7 +222,9 @@ export function useUploadProgress() {
                           converting: false,
                           converted: true,
                           downloadUrl: fullDownloadUrl,
-                          convertedFileName: downloadUrl.split("/").pop(), // Extract filename from URL
+                          convertedFileName: downloadUrl.split("/").pop(),
+                          convertedFilePath: outputPath,
+                          conversionProgress: 100,
                         }
                       : item,
                   ),
@@ -180,6 +233,11 @@ export function useUploadProgress() {
               (error) => {
                 setUploadProgress((prev) =>
                   prev.map((item) => (item.fileId === file.id ? { ...item, converting: false, error } : item)),
+                );
+              },
+              (progress) => {
+                setUploadProgress((prev) =>
+                  prev.map((item) => (item.fileId === file.id ? { ...item, conversionProgress: progress } : item)),
                 );
               },
               controller.signal,
@@ -238,6 +296,13 @@ export function useUploadProgress() {
       .filter(Boolean);
   };
 
+  const getConvertedFilePaths = () => {
+    return uploadProgress
+      .filter((p) => p.converted && p.convertedFilePath)
+      .map((p) => p.convertedFilePath!)
+      .filter(Boolean);
+  };
+
   const hasConvertibleFiles = () => {
     return uploadProgress.some((p) => !p.converted && !p.error && !p.aborted && p.completed);
   };
@@ -255,6 +320,7 @@ export function useUploadProgress() {
     areAllConversionsComplete,
     hasActiveOperations,
     getConvertedFileNames,
+    getConvertedFilePaths,
     hasConvertibleFiles,
     hasAnyCompletedFiles,
   };

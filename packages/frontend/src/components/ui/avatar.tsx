@@ -16,10 +16,24 @@ function Avatar({ className, ...props }: React.ComponentProps<typeof AvatarPrimi
 }
 
 function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+  const getAvatarUrl = (url?: string) => {
+    if (!url) return undefined;
+
+    if (url.includes("googleusercontent.com")) {
+      const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/=s\d+-c$/, "=s200-c"))}`;
+      return proxyUrl;
+    }
+
+    return url;
+  };
+
+  const avatarUrl = getAvatarUrl(props.src as string);
+
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
       className={cn("aspect-square size-full group-hover:opacity-80 transition-opacity", className)}
+      src={avatarUrl}
       {...props}
     />
   );

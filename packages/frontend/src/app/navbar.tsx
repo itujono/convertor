@@ -1,7 +1,6 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import AvatarDropdown from "@/components/avatar-dropdown";
 import { ZapIcon } from "lucide-react";
 
 export default function Navbar() {
@@ -18,7 +17,9 @@ export default function Navbar() {
             <span className="text-xl font-black text-slate-900 dark:text-white font-title lowercase">Convertor</span>
           </div>
 
-          <div className="flex items-center space-x-4">{user && <AvatarDropdown />}</div>
+          <div className="flex items-center space-x-4">
+            {/* Avatar dropdown is now integrated into PlanBadge component */}
+          </div>
         </div>
       </div>
     </nav>

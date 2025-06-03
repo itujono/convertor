@@ -21,6 +21,15 @@ const sharp = require("sharp");
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
+const conversionProgress = new Map<
+  string,
+  { progress: number; status: string }
+>();
+
+function getProgressKey(userId: string, filePath: string): string {
+  return `${userId}:${filePath}`;
+}
+
 export async function checkBatchLimitHandler(
   c: Context<{ Variables: Variables }>
 ) {
@@ -28,28 +37,54 @@ export async function checkBatchLimitHandler(
     const user = c.get("user");
     const { fileCount } = await c.req.json();
 
-    if (!fileCount || fileCount < 1) {
+    if (!fileCount || typeof fileCount !== "number") {
       return c.json({ error: "Invalid file count" }, 400);
     }
 
     await checkBatchConversionLimit(user.id, fileCount);
 
     return c.json({
-      success: true,
-      message: `You can convert ${fileCount} file${fileCount === 1 ? "" : "s"}`,
+      message: "Batch conversion limit check passed",
+      canConvert: true,
     });
   } catch (error: any) {
     console.error("Batch limit check error:", error);
-    return c.json(
-      { error: error.message || "Failed to check conversion limit" },
-      400
-    );
+    return c.json({ error: error.message || "Batch limit check failed" }, 500);
+  }
+}
+
+export async function getConversionProgressHandler(
+  c: Context<{ Variables: Variables }>
+) {
+  try {
+    const user = c.get("user");
+    const fullPath = c.req.path;
+    const filePath = fullPath.replace("/api/convert/progress/", "");
+
+    if (!filePath) {
+      return c.json({ error: "File path is required" }, 400);
+    }
+
+    const decodedFilePath = decodeURIComponent(filePath);
+
+    const progressKey = getProgressKey(user.id, decodedFilePath);
+    const progress = conversionProgress.get(progressKey);
+
+    if (!progress) {
+      return c.json({ error: "No conversion in progress for this file" }, 404);
+    }
+
+    return c.json(progress);
+  } catch (error) {
+    console.error("Get conversion progress error:", error);
+    return c.json({ error: "Failed to get conversion progress" }, 500);
   }
 }
 
 export async function convertHandler(c: Context<{ Variables: Variables }>) {
   let tempInputPath: string | null = null;
   let tempOutputPath: string | null = null;
+  let progressKey: string;
 
   try {
     const user = c.get("user");
@@ -61,6 +96,9 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     await checkConversionLimit(user.id);
     console.log("✅ Conversion limit check passed");
+
+    progressKey = getProgressKey(user.id, filePath);
+    conversionProgress.set(progressKey, { progress: 0, status: "starting" });
 
     console.log(
       `Starting conversion for user ${user.id}: ${filePath} -> ${format} (${quality})`
@@ -149,7 +187,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     console.log("🔄 Starting conversion...");
 
     if (isSvgFile) {
-      console.log("🎨 Converting SVG file using Sharp library");
+      console.log("🎨 Converting SVG file using Sharp");
 
       try {
         const conversionTimeout = setTimeout(() => {
@@ -197,17 +235,34 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         command
           .on("start", (commandLine: string) => {
             console.log("🚀 FFmpeg command started:", commandLine);
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "converting",
+            });
           })
           .on("progress", (progress: any) => {
-            console.log("📊 FFmpeg progress:", progress.percent + "% done");
+            const percent = Math.round(progress.percent || 0);
+            console.log("📊 FFmpeg progress:", percent + "% done");
+            conversionProgress.set(progressKey, {
+              progress: percent,
+              status: "converting",
+            });
           })
           .on("end", () => {
             console.log("✅ FFmpeg conversion completed successfully");
+            conversionProgress.set(progressKey, {
+              progress: 100,
+              status: "uploading",
+            });
             clearTimeout(conversionTimeout);
             resolve(null);
           })
           .on("error", (err: any) => {
             console.error("❌ FFmpeg error:", err);
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "failed",
+            });
             clearTimeout(conversionTimeout);
             reject(err);
           })
@@ -281,6 +336,9 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     console.log("🎉 Conversion process completed successfully");
 
+    // Clean up progress tracking
+    conversionProgress.delete(progressKey);
+
     return c.json({
       message: "Conversion completed successfully",
       outputPath: uploadResult.filePath,
@@ -288,6 +346,15 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     });
   } catch (error: any) {
     console.error("💥 CONVERSION ERROR:", error);
+
+    // Clean up progress tracking on error (only if progressKey was set)
+    try {
+      if (progressKey!) {
+        conversionProgress.delete(progressKey);
+      }
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
 
     try {
       const { filePath } = await c.req.json().catch(() => ({}));

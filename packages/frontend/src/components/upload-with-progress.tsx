@@ -23,9 +23,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { apiClient } from "@/lib/api-client";
+import { useState } from "react";
 
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
   const {
     uploadProgress,
@@ -36,6 +38,7 @@ export default function UploadWithProgress() {
     areAllConversionsComplete,
     hasActiveOperations,
     getConvertedFileNames,
+    getConvertedFilePaths,
     hasConvertibleFiles,
     hasAnyCompletedFiles,
   } = useUploadProgress();
@@ -84,12 +87,15 @@ export default function UploadWithProgress() {
 
   const handleDownloadAllAsZip = async () => {
     try {
-      const convertedFileNames = getConvertedFileNames();
-      if (convertedFileNames.length > 0) {
-        await apiClient.downloadZip(convertedFileNames);
+      setIsDownloadingZip(true);
+      const convertedFilePaths = getConvertedFilePaths();
+      if (convertedFilePaths.length > 0) {
+        await apiClient.downloadZip(convertedFilePaths);
       }
     } catch (error) {
       console.error("Failed to download zip:", error);
+    } finally {
+      setIsDownloadingZip(false);
     }
   };
 
@@ -184,9 +190,14 @@ export default function UploadWithProgress() {
             <div className="flex flex-col items-center mt-6 gap-2">
               {areAllConversionsComplete() ? (
                 <div className="flex flex-col items-center gap-2">
-                  <Button onClick={handleDownloadAllAsZip} size="lg" className="w-full sm:w-auto px-8">
+                  <Button
+                    onClick={handleDownloadAllAsZip}
+                    size="lg"
+                    className="w-full sm:w-auto px-8"
+                    disabled={isDownloadingZip}
+                  >
                     <DownloadIcon className="w-4 h-4 mr-2" />
-                    Download all as zip
+                    {isDownloadingZip ? "Preparing zip..." : "Download all as zip"}
                   </Button>
                   <Button
                     onClick={() => handleClearAll()}
@@ -240,10 +251,15 @@ export default function UploadWithProgress() {
                 </Button>
               ) : hasAnyCompletedFiles() ? (
                 <div className="flex flex-col items-center gap-2">
-                  {getConvertedFileNames().length > 0 && (
-                    <Button onClick={handleDownloadAllAsZip} size="lg" className="w-full sm:w-auto px-8">
+                  {getConvertedFilePaths().length > 0 && (
+                    <Button
+                      onClick={handleDownloadAllAsZip}
+                      size="lg"
+                      className="w-full sm:w-auto px-8"
+                      disabled={isDownloadingZip}
+                    >
                       <DownloadIcon className="w-4 h-4 mr-2" />
-                      Download converted files
+                      {isDownloadingZip ? "Preparing zip..." : "Download converted files"}
                     </Button>
                   )}
                   <Button
