@@ -1,5 +1,4 @@
-[providers]
-node = false
+providers = []
 
 [phases.setup]
 nixPkgs = ["bun", "ffmpeg"]
