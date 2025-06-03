@@ -1,27 +1,3 @@
-// Load environment variables first
-// import { readFileSync } from "fs";
-// import { join } from "path";
-
-// Load .env file manually for Bun
-// try {
-//   const envPath = join(process.cwd(), ".env");
-//   const envFile = readFileSync(envPath, "utf8");
-
-//   envFile.split("\n").forEach((line) => {
-//     const trimmed = line.trim();
-//     if (trimmed && !trimmed.startsWith("#")) {
-//       const [key, ...valueParts] = trimmed.split("=");
-//       if (key && valueParts.length > 0) {
-//         const value = valueParts.join("=");
-//         process.env[key.trim()] = value.trim();
-//       }
-//     }
-//   });
-//   console.log("✅ Environment variables loaded");
-// } catch (error) {
-//   console.warn("⚠️ Could not load .env file:", error);
-// }
-
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
@@ -50,7 +26,6 @@ import type { Variables } from "./utils/types";
 
 const app = new Hono<{ Variables: Variables }>();
 
-// Increase timeout for large file uploads
 app.use("*", async (c, next) => {
   // Set a longer timeout for upload and conversion endpoints
   if (c.req.path.includes("/upload") || c.req.path.includes("/convert")) {
@@ -121,12 +96,10 @@ app.post("/api/subscription/checkout", createCheckoutSession);
 app.get("/api/subscription", getUserSubscription);
 app.post("/api/subscription/cancel", cancelSubscription);
 
-// Cleanup endpoint (can be called by cron job)
 app.post("/api/cleanup/expired-files", cleanupExpiredFilesHandler);
 
 app.get("/health", healthHandler);
 
-// Start the server
 const port = process.env.PORT || 3001;
 console.log(`🚀 Server starting on port ${port}`);
 

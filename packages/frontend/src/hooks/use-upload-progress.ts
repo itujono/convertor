@@ -73,7 +73,6 @@ const convertFile = async (
   try {
     if (abortSignal?.aborted) return;
 
-    // Start polling for progress
     const progressInterval = setInterval(async () => {
       if (abortSignal?.aborted) {
         clearInterval(progressInterval);
@@ -81,7 +80,6 @@ const convertFile = async (
       }
 
       try {
-        // URL encode the file path for the API call
         const encodedFilePath = encodeURIComponent(filePath);
         const progressUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/convert/progress/${encodedFilePath}`;
 
@@ -95,10 +93,8 @@ const convertFile = async (
             onProgress(progressData.progress);
           }
         }
-      } catch (error) {
-        // Ignore progress polling errors
-      }
-    }, 1000); // Poll every second
+      } catch (error) {}
+    }, 1000);
 
     const response = await apiClient.convertFile(filePath, format, quality);
 
@@ -109,7 +105,6 @@ const convertFile = async (
   }
 };
 
-// Helper function to get auth headers (similar to ApiClient)
 async function getAuthHeaders(): Promise<HeadersInit> {
   const { supabase } = await import("@/lib/auth-client");
   const {
@@ -134,7 +129,6 @@ export function useUploadProgress() {
   const { refreshUser } = useAuth();
   const hasRefreshedRef = useRef(false);
 
-  // Prevent page refresh/close during uploads
   useEffect(() => {
     const hasActiveUploads = uploadProgress.some((p) => (!p.completed && !p.aborted) || p.converting);
 
@@ -163,7 +157,6 @@ export function useUploadProgress() {
       refreshUser();
     }
 
-    // Reset the ref when starting new uploads
     if (uploadProgress.length === 0) {
       hasRefreshedRef.current = false;
     }
@@ -201,7 +194,6 @@ export function useUploadProgress() {
             prev.map((item) => (item.fileId === file.id ? { ...item, completed: true, converting: true } : item)),
           );
 
-          // Start conversion
           const targetFormat = selectedFormats[file.id];
           const targetQuality = selectedQualities[file.id] || "medium";
           if (targetFormat) {
@@ -271,7 +263,6 @@ export function useUploadProgress() {
   };
 
   const clearProgress = () => {
-    // Abort all active uploads
     abortControllers.forEach((controller) => controller.abort());
     setAbortControllers(new Map());
     setUploadProgress([]);
