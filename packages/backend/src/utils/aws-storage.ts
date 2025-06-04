@@ -143,12 +143,11 @@ export async function downloadFile(filePath: string): Promise<Buffer> {
     Key: filePath,
   });
 
-  // Add timeout for S3 download (2 minutes)
   const downloadPromise = s3Client.send(command);
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => {
       reject(new Error("S3 download timeout after 2 minutes"));
-    }, 2 * 60 * 1000);
+    }, 2 * 60 * 1000); // 2 minutes
   });
 
   const response = (await Promise.race([
@@ -160,7 +159,6 @@ export async function downloadFile(filePath: string): Promise<Buffer> {
     throw new Error("File not found or empty");
   }
 
-  // Convert stream to buffer with timeout
   const chunks: Uint8Array[] = [];
   const reader = response.Body.transformToWebStream().getReader();
 

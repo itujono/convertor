@@ -1,3 +1,3 @@
-import { createSupabaseClient } from "db/schema";
+import { createSupabaseClient } from "@convertor/db/schema";
 
 export const supabaseAdmin = createSupabaseClient();

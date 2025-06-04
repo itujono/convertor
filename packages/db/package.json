@@ -1,5 +1,5 @@
 {
-    "name": "db",
+    "name": "@convertor/db",
     "version": "1.0.0",
     "private": true,
     "main": "./schema.ts",
