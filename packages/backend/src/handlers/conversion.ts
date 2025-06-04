@@ -47,8 +47,6 @@ try {
   }
 }
 
-const sharp = require("sharp");
-
 const conversionProgress = new Map<
   string,
   { progress: number; status: string }
@@ -157,7 +155,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     const isSvgFile = fileExtension === "svg";
 
     if (isSvgFile) {
-      console.log("🎨 Detected SVG file, using special handling");
+      console.log("🎨 Detected SVG file, using FFmpeg for conversion");
 
       if (!["png", "jpg", "jpeg", "webp"].includes(format.toLowerCase())) {
         throw new Error(
@@ -165,9 +163,46 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         );
       }
 
-      // Use ImageMagick or similar for SVG conversion
-      // For now, let's skip the FFmpeg probe for SVG files
-      console.log("⚠️ Skipping FFmpeg probe for SVG file");
+      // Use FFmpeg for SVG conversion instead of Sharp
+      await new Promise((resolve, reject) => {
+        let command = ffmpeg(tempInputPath).output(tempOutputPath);
+
+        if (format.toLowerCase() === "png") {
+          command = command.outputOptions(["-f", "png"]);
+        } else if (
+          format.toLowerCase() === "jpg" ||
+          format.toLowerCase() === "jpeg"
+        ) {
+          command = command.outputOptions(["-f", "image2", "-vcodec", "mjpeg"]);
+        } else if (format.toLowerCase() === "webp") {
+          command = command.outputOptions(["-f", "webp"]);
+        }
+
+        command = applyQualitySettings(command, format, quality);
+
+        const conversionTimeout = setTimeout(() => {
+          console.error("❌ SVG conversion timeout after 5 minutes");
+          reject(new Error("SVG conversion timeout"));
+        }, 5 * 60 * 1000);
+
+        command
+          .on("start", (commandLine: string) => {
+            console.log("🚀 FFmpeg SVG command started:", commandLine);
+          })
+          .on("end", () => {
+            console.log(
+              "✅ SVG conversion completed successfully using FFmpeg"
+            );
+            clearTimeout(conversionTimeout);
+            resolve(null);
+          })
+          .on("error", (err: any) => {
+            console.error("❌ FFmpeg SVG conversion failed:", err);
+            clearTimeout(conversionTimeout);
+            reject(err);
+          })
+          .run();
+      });
     } else {
       // Test FFmpeg with a simple probe command first (only for non-SVG files)
       console.log("🧪 Testing FFmpeg with probe command...");
@@ -214,89 +249,55 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     console.log("🔄 Starting conversion...");
 
-    if (isSvgFile) {
-      console.log("🎨 Converting SVG file using Sharp");
+    await new Promise((resolve, reject) => {
+      let command = ffmpeg(tempInputPath).output(tempOutputPath);
 
-      try {
-        const conversionTimeout = setTimeout(() => {
-          console.error("❌ SVG conversion timeout after 5 minutes");
-          throw new Error("SVG conversion timeout");
-        }, 5 * 60 * 1000);
+      command = applyQualitySettings(command, format, quality);
+      console.log("⚙️ Quality settings applied");
 
-        let sharpInstance = sharp(tempInputPath);
+      const conversionTimeout = setTimeout(() => {
+        console.error("❌ FFmpeg conversion timeout after 5 minutes");
+        reject(
+          new Error("Conversion timeout - file may be too large or complex")
+        );
+      }, 5 * 60 * 1000);
 
-        if (format.toLowerCase() === "jpg" || format.toLowerCase() === "jpeg") {
-          const jpegQuality =
-            quality === "low" ? 60 : quality === "high" ? 95 : 80;
-          sharpInstance = sharpInstance.jpeg({ quality: jpegQuality });
-        } else if (format.toLowerCase() === "png") {
-          const pngQuality = quality === "low" ? 6 : quality === "high" ? 9 : 8;
-          sharpInstance = sharpInstance.png({ compressionLevel: pngQuality });
-        } else if (format.toLowerCase() === "webp") {
-          const webpQuality =
-            quality === "low" ? 60 : quality === "high" ? 95 : 80;
-          sharpInstance = sharpInstance.webp({ quality: webpQuality });
-        }
-
-        await sharpInstance.toFile(tempOutputPath);
-
-        clearTimeout(conversionTimeout);
-        console.log("✅ SVG conversion completed successfully using Sharp");
-      } catch (svgError: any) {
-        console.error("❌ SVG conversion failed:", svgError);
-        throw new Error(`SVG conversion failed: ${svgError.message}`);
-      }
-    } else {
-      await new Promise((resolve, reject) => {
-        let command = ffmpeg(tempInputPath).output(tempOutputPath);
-
-        command = applyQualitySettings(command, format, quality);
-        console.log("⚙️ Quality settings applied");
-
-        const conversionTimeout = setTimeout(() => {
-          console.error("❌ FFmpeg conversion timeout after 5 minutes");
-          reject(
-            new Error("Conversion timeout - file may be too large or complex")
-          );
-        }, 5 * 60 * 1000);
-
-        command
-          .on("start", (commandLine: string) => {
-            console.log("🚀 FFmpeg command started:", commandLine);
-            conversionProgress.set(progressKey, {
-              progress: 0,
-              status: "converting",
-            });
-          })
-          .on("progress", (progress: any) => {
-            const percent = Math.round(progress.percent || 0);
-            console.log("📊 FFmpeg progress:", percent + "% done");
-            conversionProgress.set(progressKey, {
-              progress: percent,
-              status: "converting",
-            });
-          })
-          .on("end", () => {
-            console.log("✅ FFmpeg conversion completed successfully");
-            conversionProgress.set(progressKey, {
-              progress: 100,
-              status: "uploading",
-            });
-            clearTimeout(conversionTimeout);
-            resolve(null);
-          })
-          .on("error", (err: any) => {
-            console.error("❌ FFmpeg error:", err);
-            conversionProgress.set(progressKey, {
-              progress: 0,
-              status: "failed",
-            });
-            clearTimeout(conversionTimeout);
-            reject(err);
-          })
-          .run();
-      });
-    }
+      command
+        .on("start", (commandLine: string) => {
+          console.log("🚀 FFmpeg command started:", commandLine);
+          conversionProgress.set(progressKey, {
+            progress: 0,
+            status: "converting",
+          });
+        })
+        .on("progress", (progress: any) => {
+          const percent = Math.round(progress.percent || 0);
+          console.log("📊 FFmpeg progress:", percent + "% done");
+          conversionProgress.set(progressKey, {
+            progress: percent,
+            status: "converting",
+          });
+        })
+        .on("end", () => {
+          console.log("✅ FFmpeg conversion completed successfully");
+          conversionProgress.set(progressKey, {
+            progress: 100,
+            status: "uploading",
+          });
+          clearTimeout(conversionTimeout);
+          resolve(null);
+        })
+        .on("error", (err: any) => {
+          console.error("❌ FFmpeg error:", err);
+          conversionProgress.set(progressKey, {
+            progress: 0,
+            status: "failed",
+          });
+          clearTimeout(conversionTimeout);
+          reject(err);
+        })
+        .run();
+    });
 
     console.log("⬆️ Starting S3 upload of converted file");
     const uploadResult = await uploadConvertedFile(
