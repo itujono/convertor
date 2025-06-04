@@ -1,4 +1,4 @@
-import { Context } from "hono";
+import type { Context } from "hono";
 import { join } from "path";
 import { mkdir, unlink } from "fs/promises";
 import {
@@ -16,10 +16,38 @@ import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
 
 const ffmpeg = require("fluent-ffmpeg");
-const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-const sharp = require("sharp");
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// Try to use system FFmpeg first (for production), fallback to installer (for local dev)
+try {
+  // Check if system FFmpeg is available
+  const { execSync } = require("child_process");
+  const systemFfmpegPath = execSync("which ffmpeg", {
+    encoding: "utf8",
+  }).trim();
+  if (systemFfmpegPath) {
+    console.log("🎬 Using system FFmpeg:", systemFfmpegPath);
+    ffmpeg.setFfmpegPath(systemFfmpegPath);
+  } else {
+    throw new Error("System FFmpeg not found");
+  }
+} catch (error) {
+  // Fallback to @ffmpeg-installer for local development
+  console.log("⚠️ System FFmpeg not found, trying installer package...");
+  try {
+    const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+    console.log("🎬 Using installer FFmpeg:", ffmpegInstaller.path);
+    ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+  } catch (installerError) {
+    console.error(
+      "❌ Both system and installer FFmpeg failed:",
+      error,
+      installerError
+    );
+    throw new Error("FFmpeg not available");
+  }
+}
+
+const sharp = require("sharp");
 
 const conversionProgress = new Map<
   string,
@@ -182,7 +210,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       console.log("✅ Conversion logged to database");
     }
 
-    console.log("🎬 FFmpeg path:", ffmpegInstaller.path);
+    console.log("🎬 FFmpeg path:", ffmpeg.getFfmpegPath());
 
     console.log("🔄 Starting conversion...");
 

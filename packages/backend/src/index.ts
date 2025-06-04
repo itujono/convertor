@@ -55,15 +55,41 @@ app.post("/webhooks/stripe", handleStripeWebhook);
 
 app.get("/api/debug/conversion-setup", async (c) => {
   try {
-    const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-    const fs = await import("fs").then((m) => m.promises);
+    let ffmpegPath = "Not found";
+    let ffmpegExists = false;
+
+    // Try system FFmpeg first
+    try {
+      const { execSync } = require("child_process");
+      const systemFfmpegPath = execSync("which ffmpeg", {
+        encoding: "utf8",
+      }).trim();
+      if (systemFfmpegPath) {
+        ffmpegPath = systemFfmpegPath;
+        const fs = await import("fs").then((m) => m.promises);
+        ffmpegExists = await fs
+          .access(systemFfmpegPath)
+          .then(() => true)
+          .catch(() => false);
+      }
+    } catch (error) {
+      // Fallback to installer package
+      try {
+        const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+        ffmpegPath = ffmpegInstaller.path;
+        const fs = await import("fs").then((m) => m.promises);
+        ffmpegExists = await fs
+          .access(ffmpegInstaller.path)
+          .then(() => true)
+          .catch(() => false);
+      } catch (installerError) {
+        // Both failed
+      }
+    }
 
     const checks = {
-      ffmpegPath: ffmpegInstaller.path,
-      ffmpegExists: await fs
-        .access(ffmpegInstaller.path)
-        .then(() => true)
-        .catch(() => false),
+      ffmpegPath,
+      ffmpegExists,
       awsRegion: process.env.AWS_REGION,
       awsBucket: process.env.AWS_S3_BUCKET,
       awsAccessKey: process.env.AWS_ACCESS_KEY_ID ? "Set" : "Missing",
