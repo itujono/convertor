@@ -1,7 +1,7 @@
 providers = []
 
 [phases.setup]
-nixPkgs = ["bun", "ffmpeg"]
+nixPkgs = ["bun", "ffmpeg", "vips", "pkg-config", "nodejs_20"]
 
 [phases.install]
 cmd = "bun install --frozen-lockfile"
