@@ -10,4 +10,4 @@ cmd = "bun install --frozen-lockfile"
 cmd = "echo 'Build complete'"
 
 [start]
-cmd = "cd packages/backend && bun run src/index.ts" 
+cmd = "bun run packages/backend/src/index.ts" 
