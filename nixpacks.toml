@@ -10,4 +10,4 @@ cmd = "bun install --frozen-lockfile"
 cmd = "echo 'Build complete'"
 
 [start]
-cmd = "bun run packages/backend/src/index.ts"
+cmd = "NODE_PATH=/app/node_modules:/app/packages/backend/node_modules bun run packages/backend/src/index.ts"

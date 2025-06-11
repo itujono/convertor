@@ -72,12 +72,14 @@ const convertFile = async (
   onProgress: (progress: number) => void,
   abortSignal?: AbortSignal,
 ) => {
+  let progressInterval: NodeJS.Timeout | null = null;
+
   try {
     if (abortSignal?.aborted) return;
 
-    const progressInterval = setInterval(async () => {
+    progressInterval = setInterval(async () => {
       if (abortSignal?.aborted) {
-        clearInterval(progressInterval);
+        if (progressInterval) clearInterval(progressInterval);
         return;
       }
 
@@ -95,14 +97,17 @@ const convertFile = async (
             onProgress(progressData.progress);
           }
         }
-      } catch (error) {}
+      } catch (error) {
+        // Ignore progress polling errors to avoid spam
+      }
     }, 1000);
 
     const response = await apiClient.convertFile(filePath, format, quality);
 
-    clearInterval(progressInterval);
+    if (progressInterval) clearInterval(progressInterval);
     onComplete(response.downloadUrl, response.outputPath);
   } catch (error) {
+    if (progressInterval) clearInterval(progressInterval);
     onError(error instanceof Error ? error.message : "Conversion failed");
   }
 };

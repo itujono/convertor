@@ -26,6 +26,22 @@ import type { Variables } from "./utils/types";
 
 const app = new Hono<{ Variables: Variables }>();
 
+// Add startup dependency checks
+console.log("🔍 Checking dependencies...");
+try {
+  const awsS3 = await import("@aws-sdk/client-s3");
+  console.log("✅ AWS S3 SDK loaded successfully");
+} catch (error) {
+  console.error("❌ Failed to load AWS S3 SDK:", error);
+}
+
+try {
+  const awsPresigner = await import("@aws-sdk/s3-request-presigner");
+  console.log("✅ AWS S3 Request Presigner loaded successfully");
+} catch (error) {
+  console.error("❌ Failed to load AWS S3 Request Presigner:", error);
+}
+
 app.use("*", async (c, next) => {
   // Set a longer timeout for upload and conversion endpoints
   if (c.req.path.includes("/upload") || c.req.path.includes("/convert")) {
