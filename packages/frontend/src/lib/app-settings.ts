@@ -57,7 +57,7 @@ export interface AppSettings {
 
 export const AppSettings: AppSettings = {
   name: "Convertor",
-  url: "https://convertor.com",
+  url: "https://useconvertor.com",
   author: {
     name: "Riva",
     url: "https://x.com/rvywr",

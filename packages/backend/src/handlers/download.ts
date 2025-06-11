@@ -1,16 +1,10 @@
-import { Context } from "hono";
+import type { Context } from "hono";
 import { join } from "path";
 import { createWriteStream } from "fs";
 import { mkdir, unlink } from "fs/promises";
-import {
-  downloadFile,
-  uploadFile,
-  createSignedDownloadUrl,
-  scheduleFileCleanup,
-} from "../utils/aws-storage";
+import { downloadFile, createSignedDownloadUrl } from "../utils/aws-storage";
 import type { Variables } from "../utils/types";
-
-const archiver = require("archiver");
+import archiver from "archiver";
 
 export async function downloadHandler(c: Context<{ Variables: Variables }>) {
   try {
