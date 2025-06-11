@@ -75,7 +75,7 @@ bun run dev
 - `POST /api/convert` - Convert files
 - `GET /api/download/:filename` - Download converted files
 - `GET /api/user` - Get current user info
-- `GET /health` - Health check
+- `GET /api/health` - Health check
 - `/auth/*` - Authentication endpoints (includes Google OAuth)
 
 ## Authentication

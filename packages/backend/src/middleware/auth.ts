@@ -1,4 +1,4 @@
-import { Context, Next } from "hono";
+import type { Context, Next } from "hono";
 import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
 
@@ -6,7 +6,7 @@ export async function authMiddleware(
   c: Context<{ Variables: Variables }>,
   next: Next
 ) {
-  if (c.req.path === "/health") {
+  if (c.req.path === "/api/health") {
     return next();
   }
 

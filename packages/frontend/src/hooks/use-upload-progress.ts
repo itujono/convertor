@@ -3,6 +3,8 @@ import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export interface UploadProgress {
   fileId: string;
   progress: number;
@@ -81,7 +83,7 @@ const convertFile = async (
 
       try {
         const encodedFilePath = encodeURIComponent(filePath);
-        const progressUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/convert/progress/${encodedFilePath}`;
+        const progressUrl = `${API_BASE_URL}/api/convert/progress/${encodedFilePath}`;
 
         const response = await fetch(progressUrl, {
           headers: await getAuthHeaders(),
@@ -202,9 +204,7 @@ export function useUploadProgress() {
               targetFormat,
               targetQuality,
               (downloadUrl, outputPath) => {
-                const fullDownloadUrl = downloadUrl.startsWith("/")
-                  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}${downloadUrl}`
-                  : downloadUrl;
+                const fullDownloadUrl = downloadUrl.startsWith("/") ? `${API_BASE_URL}${downloadUrl}` : downloadUrl;
 
                 setUploadProgress((prev) =>
                   prev.map((item) =>

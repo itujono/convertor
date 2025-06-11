@@ -193,7 +193,7 @@ class ApiClient {
   }
 
   async healthCheck() {
-    return this.request("/health");
+    return this.request("/api/health");
   }
 
   async getUserFiles() {

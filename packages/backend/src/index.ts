@@ -44,9 +44,13 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: process.env.FRONTEND_URL
-      ? [process.env.FRONTEND_URL, "http://localhost:3000"]
-      : ["http://localhost:3000"],
+    origin: [
+      "https://www.useconvertor.com",
+      "https://useconvertor.com",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+    ],
     credentials: true,
   })
 );
@@ -105,6 +109,7 @@ app.get("/api/debug/conversion-setup", async (c) => {
 
 app.use("/api/*", authMiddleware);
 
+app.get("/api/health", healthHandler);
 app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
 app.post("/api/convert", convertHandler);
@@ -123,8 +128,6 @@ app.get("/api/subscription", getUserSubscription);
 app.post("/api/subscription/cancel", cancelSubscription);
 
 app.post("/api/cleanup/expired-files", cleanupExpiredFilesHandler);
-
-app.get("/health", healthHandler);
 
 const port = process.env.PORT || 3001;
 console.log(`🚀 Server starting on port ${port}`);
