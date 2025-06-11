@@ -15,6 +15,11 @@ import {
   type UserPlan,
   type PlanLimits,
 } from "@/lib/app-settings";
+import {
+  generateConversionLimitMessages,
+  calculateRemainingConversions,
+  checkDailyReset,
+} from "@/lib/conversion-messages";
 
 interface User {
   id: string;
@@ -68,8 +73,9 @@ export function useAppSettings(): AppSettingsContext {
         plan: authUser.plan as UserPlan,
         isAuthenticated: !!session,
         usage: {
-          conversionsToday: authUser.conversionCount || 0, // Might want to track daily vs total separately
-          conversionsThisMonth: authUser.conversionCount || 0,
+          // Calculate proper conversions today using daily reset logic
+          conversionsToday: checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0,
+          conversionsThisMonth: authUser.conversionCount || 0, // TODO: Implement monthly tracking separately
           storageUsedGB: 0, // TODO: Implement storage tracking
         },
       }
@@ -130,9 +136,7 @@ export function useAppSettings(): AppSettingsContext {
       if (conversionCount > remaining.daily) {
         return {
           isValid: false,
-          error: `Not enough conversions remaining. You have ${remaining.daily} conversion${
-            remaining.daily === 1 ? "" : "s"
-          } left today, but trying to convert ${conversionCount} file${conversionCount === 1 ? "" : "s"}.`,
+          error: generateConversionLimitMessages.insufficientConversions(remaining.daily, conversionCount),
         };
       }
 
@@ -149,15 +153,22 @@ export function useAppSettings(): AppSettingsContext {
     };
 
     const getRemainingConversions = () => {
-      if (!user?.usage) {
+      if (!user?.usage || !authUser) {
         return {
           daily: planLimits.quotas.conversionsPerDay,
           monthly: planLimits.quotas.conversionsPerMonth,
         };
       }
 
+      // Use the centralized calculation that handles daily resets
+      const dailyRemaining = calculateRemainingConversions(
+        authUser.plan as "free" | "premium",
+        authUser.conversionCount,
+        authUser.lastReset,
+      );
+
       return {
-        daily: Math.max(0, planLimits.quotas.conversionsPerDay - user.usage.conversionsToday),
+        daily: dailyRemaining,
         monthly: Math.max(0, planLimits.quotas.conversionsPerMonth - user.usage.conversionsThisMonth),
       };
     };
@@ -203,7 +214,7 @@ export function useAppSettings(): AppSettingsContext {
 
       settings: AppSettings,
     };
-  }, [user, userPlan, planLimits, isAuthenticated]);
+  }, [user, userPlan, planLimits, isAuthenticated, authUser]);
 
   return context;
 }

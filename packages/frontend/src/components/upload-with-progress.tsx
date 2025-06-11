@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiClient } from "@/lib/api-client";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
@@ -141,11 +142,19 @@ export default function UploadWithProgress() {
             onDragOver={fileUploadActions.handleDragOver}
             onDrop={fileUploadActions.handleDrop}
             data-dragging={isDragging || undefined}
-            className="border-input hover:bg-accent/50 py-12 sm:py-16 cursor-pointer data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-32 sm:min-h-40 flex-col items-center justify-center rounded-xl border border-dashed p-4 transition-colors has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px]"
+            className={cn(
+              "flex min-h-32 sm:min-h-40 flex-col items-center justify-center rounded-xl p-4 bg-background/20",
+              "border-2 border-dashed border-background",
+              "py-12 sm:py-16",
+              "cursor-pointer transition-colors",
+              "hover:bg-background/70 data-[dragging=true]:bg-background/70",
+              "has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 has-[input:focus]:ring-[3px]",
+              "has-disabled:pointer-events-none has-disabled:opacity-50",
+            )}
           >
             <input {...fileUploadActions.getInputProps()} className="sr-only" aria-label="Upload files" />
             <div className="flex flex-col items-center gap-2">
-              <div className="flex size-8 sm:size-10 items-center justify-center rounded-full border">
+              <div className="flex size-8 sm:size-10 items-center justify-center rounded-full border-2 border-background">
                 <FileUpIcon className="size-3 sm:size-4" aria-hidden="true" />
               </div>
               <div className="text-center px-4">
@@ -201,7 +210,7 @@ export default function UploadWithProgress() {
                   </Button>
                   <Button
                     onClick={() => handleClearAll()}
-                    variant="outline"
+                    variant="link"
                     size="sm"
                     className="w-full sm:w-auto px-6 mt-2"
                   >

@@ -30,6 +30,13 @@ export interface SignedUrlResult {
   expiresIn: number;
 }
 
+function sanitizeFilenameForHeader(filename: string): string {
+  return filename
+    .replace(/[^\x20-\x7E]/g, "") // Remove non-ASCII characters
+    .replace(/["\\\r\n]/g, "") // Remove quotes, backslashes, and line breaks
+    .trim();
+}
+
 export async function uploadFile(
   file: Buffer | Uint8Array | File,
   fileName: string,
@@ -51,7 +58,7 @@ export async function uploadFile(
     Body: fileBuffer,
     ContentType: mimeType || "application/octet-stream",
     Metadata: {
-      "original-filename": fileName,
+      "original-filename": sanitizeFilenameForHeader(fileName),
       "user-id": userId,
     },
   });
@@ -73,9 +80,6 @@ export async function uploadFile(
   };
 }
 
-/**
- * Upload converted file to S3
- */
 export async function uploadConvertedFile(
   localFilePath: string,
   userId: string,
@@ -97,7 +101,7 @@ export async function uploadConvertedFile(
     Body: fileBuffer,
     ContentType: getMimeType(targetFormat),
     Metadata: {
-      "original-filename": originalFileName,
+      "original-filename": sanitizeFilenameForHeader(originalFileName),
       "converted-format": targetFormat,
       "user-id": userId,
     },

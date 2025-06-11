@@ -11,7 +11,7 @@ export default function UploadSection() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8" id="upload">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-4 sm:p-6 lg:p-8">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-4 sm:p-6 lg:p-12 relative z-10">
         <div className="text-center mb-6 sm:mb-8">
           {isLoading ? (
             <Skeleton className="h-4 w-64 mx-auto mb-8 pt-7" />
@@ -84,7 +84,7 @@ function UnauthedSection({ signInWithGoogle }: UnauthedSectionProps) {
   return (
     <div className="text-center py-12">
       <section className="mb-8">
-        <div className="w-20 h-20 mx-auto mb-4 bg-teal-600 rounded-full flex items-center justify-center">
+        <div className="w-20 h-20 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center">
           <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -99,7 +99,7 @@ function UnauthedSection({ signInWithGoogle }: UnauthedSectionProps) {
         </p>
       </section>
 
-      <Button onClick={signInWithGoogle} size="lg" className="mb-6">
+      <Button variant="secondary" onClick={signInWithGoogle} size="lg" className="mb-6">
         <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
           <path
             fill="currentColor"

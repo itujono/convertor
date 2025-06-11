@@ -231,7 +231,7 @@ export function ReadyDownloads() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">Ready to Download</CardTitle>
+            <CardTitle>Ready to Download</CardTitle>
             <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-8 w-8 p-0">
               <RefreshCwIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
@@ -245,11 +245,11 @@ export function ReadyDownloads() {
   }
 
   return (
-    <Card>
+    <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2">Ready to Download ({userFiles.length})</CardTitle>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+          <CardTitle>Ready to Download ({userFiles.length})</CardTitle>
+          <div className="flex gap-2 flex-row sm:items-center sm:gap-2">
             {userFiles.length > 1 && (
               <Button
                 variant="outline"
@@ -290,7 +290,7 @@ export function ReadyDownloads() {
                 key={file.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg"
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="flex gap-3 flex-1 min-w-0">
                   <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded border">
                     <FileIcon className="size-4 text-muted-foreground" />
                   </div>
@@ -301,15 +301,18 @@ export function ReadyDownloads() {
                         {expirationStatus.text}
                       </Badge>
                     </div>
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-y-1 gap-x-4 sm:gap-x-2 text-xs text-muted-foreground">
                       <span>
                         {file.original_format.toUpperCase()} → {file.converted_format.toUpperCase()}
                       </span>
+                      <span className="hidden sm:inline">&middot;</span>
                       <span>{formatBytes(file.file_size)}</span>
+                      <span className="hidden sm:inline">&middot;</span>
                       <span className="flex items-center gap-1">
                         <ClockIcon className="size-3" />
                         {formatTimeRemaining(file.time_remaining)} left
                       </span>
+                      <span className="hidden sm:inline">&middot;</span>
                       <span className="text-xs">{formatRelativeTime(file.created_at)}</span>
                     </div>
                   </div>

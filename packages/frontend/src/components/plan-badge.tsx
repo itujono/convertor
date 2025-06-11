@@ -89,7 +89,7 @@ export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeCo
           </DropdownMenu>
         </div>
       )}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+      <div className="flex gap-1 flex-row sm:items-center sm:gap-2">
         {isLoading ? (
           <Skeleton className="h-4 w-16" />
         ) : (

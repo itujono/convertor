@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { generateConversionLimitMessages } from "./conversion-messages";
 
 export async function checkConversionLimit(
   userId: string,
@@ -37,21 +38,16 @@ export async function checkConversionLimit(
 
   if (userData.conversion_count >= dailyLimit) {
     throw new Error(
-      `Daily conversion limit reached. ${
-        userData.plan === "free"
-          ? "Upgrade to premium for more conversions."
-          : "Please try again tomorrow."
-      }`
+      generateConversionLimitMessages.dailyLimitReached(userData.plan)
     );
   }
 
   if (fileCount > remainingConversions) {
     throw new Error(
-      `Not enough conversions remaining. You have ${remainingConversions} conversion${
-        remainingConversions === 1 ? "" : "s"
-      } left today, but trying to convert ${fileCount} file${
-        fileCount === 1 ? "" : "s"
-      }.`
+      generateConversionLimitMessages.insufficientConversions(
+        remainingConversions,
+        fileCount
+      )
     );
   }
 

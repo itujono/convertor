@@ -17,6 +17,8 @@ import type { Variables } from "../utils/types";
 
 const ffmpeg = require("fluent-ffmpeg");
 
+let ffmpegPath: string | null = null;
+
 // Try to use system FFmpeg first (for production), fallback to installer (for local dev)
 try {
   // Check if system FFmpeg is available
@@ -25,6 +27,7 @@ try {
     encoding: "utf8",
   }).trim();
   if (systemFfmpegPath) {
+    ffmpegPath = systemFfmpegPath;
     console.log("🎬 Using system FFmpeg:", systemFfmpegPath);
     ffmpeg.setFfmpegPath(systemFfmpegPath);
   } else {
@@ -35,6 +38,7 @@ try {
   console.log("⚠️ System FFmpeg not found, trying installer package...");
   try {
     const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+    ffmpegPath = ffmpegInstaller.path;
     console.log("🎬 Using installer FFmpeg:", ffmpegInstaller.path);
     ffmpeg.setFfmpegPath(ffmpegInstaller.path);
   } catch (installerError) {
@@ -245,7 +249,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       console.log("✅ Conversion logged to database");
     }
 
-    console.log("🎬 FFmpeg path:", ffmpeg.getFfmpegPath());
+    console.log("🎬 FFmpeg path:", ffmpegPath);
 
     console.log("🔄 Starting conversion...");
 
@@ -430,11 +434,11 @@ function applyQualitySettings(
   if (isImage) {
     switch (quality) {
       case "low":
-        return command.outputOptions(["-q:v", "8"]); // Lower quality
+        return command.outputOptions(["-q:v", "8"]);
       case "high":
-        return command.outputOptions(["-q:v", "2"]); // Higher quality
+        return command.outputOptions(["-q:v", "2"]);
       default: // medium
-        return command.outputOptions(["-q:v", "5"]); // Medium quality
+        return command.outputOptions(["-q:v", "5"]);
     }
   } else if (isVideo) {
     switch (quality) {
