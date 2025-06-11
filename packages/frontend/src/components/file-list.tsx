@@ -265,12 +265,9 @@ export function FileQualitySelector({
         className="flex gap-0 -space-x-px rounded-md shadow-xs w-full sm:w-auto"
       >
         {availableQualities.map((quality) => (
-          <Tooltip>
+          <Tooltip key={quality.value}>
             <TooltipTrigger asChild>
-              <label
-                key={quality.value}
-                className="border-input has-data-[state=checked]:border-primary/50 has-focus-visible:border-ring has-focus-visible:ring-ring/50 relative flex h-7 min-w-10 flex-1 cursor-pointer items-center justify-center border px-1.5 text-center text-xs font-medium transition-[color,box-shadow] outline-none first:rounded-s-md last:rounded-e-md has-focus-visible:ring-[3px] has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50 has-data-[state=checked]:z-10 has-data-[state=checked]:bg-primary/5"
-              >
+              <label className="border-input has-data-[state=checked]:border-primary/50 has-focus-visible:border-ring has-focus-visible:ring-ring/50 relative flex h-7 min-w-10 flex-1 cursor-pointer items-center justify-center border px-1.5 text-center text-xs font-medium transition-[color,box-shadow] outline-none first:rounded-s-md last:rounded-e-md has-focus-visible:ring-[3px] has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50 has-data-[state=checked]:z-10 has-data-[state=checked]:bg-primary/5">
                 <RadioGroupItem
                   id={`${id}-${quality.value}`}
                   value={quality.value}
