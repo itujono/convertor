@@ -140,8 +140,38 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     console.log("✅ Temp directory created");
 
     console.log("⬇️ Starting S3 download for:", filePath);
-    const fileBuffer = await downloadFile(filePath);
-    console.log("✅ S3 download completed, buffer size:", fileBuffer.length);
+    console.log("📋 S3 Key details:", {
+      key: filePath,
+      bucket: process.env.AWS_S3_BUCKET,
+      region: process.env.AWS_REGION,
+    });
+
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await downloadFile(filePath);
+      console.log("✅ S3 download completed, buffer size:", fileBuffer.length);
+    } catch (downloadError: any) {
+      console.error("❌ S3 download failed:", {
+        error: downloadError.message,
+        filePath,
+        errorCode: downloadError.Code || downloadError.code,
+        errorName: downloadError.name,
+      });
+
+      if (
+        downloadError.name === "NoSuchKey" ||
+        downloadError.Code === "NoSuchKey"
+      ) {
+        return c.json(
+          {
+            error: `File not found: The uploaded file could not be found in storage. This may happen if there was an upload issue or the file was already processed. Please try uploading the file again.`,
+          },
+          404
+        );
+      }
+
+      throw downloadError; // Re-throw other S3 errors
+    }
 
     const originalFileName = filePath.split("/").pop() || "file";
     const baseName = originalFileName.split(".")[0];

@@ -1,6 +1,6 @@
-import { Context } from "hono";
+import type { Context } from "hono";
 import { checkConversionLimit } from "../utils/conversion";
-import { uploadFile, scheduleFileCleanup } from "../utils/aws-storage";
+import { uploadFile } from "../utils/aws-storage";
 import type { Variables } from "../utils/types";
 
 export async function uploadHandler(c: Context<{ Variables: Variables }>) {
@@ -25,8 +25,8 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
 
     console.log("File uploaded to S3 successfully:", uploadResult.filePath);
 
-    // Schedule cleanup of uploaded file after 10 minutes (gives time for conversion)
-    scheduleFileCleanup([uploadResult.filePath], 10 * 60 * 1000);
+    // Don't schedule immediate cleanup - files will be cleaned up after conversion
+    // or by the expired files cleanup job
 
     return c.json({
       message: "File uploaded successfully",
