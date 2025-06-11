@@ -224,9 +224,9 @@ export default function UploadWithProgress() {
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <button className="text-sm text-destructive hover:text-foreground hover:underline mt-4">
+                      <Button variant="link" className="text-destructive">
                         Abort all...
-                      </button>
+                      </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
