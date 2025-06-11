@@ -44,14 +44,25 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: [
-      "https://www.useconvertor.com",
-      "https://useconvertor.com",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
-    ],
+    origin: (origin, c) => {
+      const allowedOrigins = [
+        "https://www.useconvertor.com",
+        "https://useconvertor.com",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+      ];
+
+      // Return the origin if it's allowed, null otherwise
+      if (!origin || allowedOrigins.includes(origin)) {
+        return origin || "*";
+      }
+
+      return null;
+    },
     credentials: true,
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 
@@ -71,6 +82,8 @@ app.get("/api/debug/cors", async (c) => {
     frontendUrl: process.env.FRONTEND_URL,
     nodeEnv: process.env.NODE_ENV,
     requestOrigin: c.req.header("origin"),
+    railwayUrl:
+      process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_DOMAIN || "not-set",
   });
 });
 
