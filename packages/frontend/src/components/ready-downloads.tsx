@@ -5,7 +5,6 @@ import {
   DownloadIcon,
   TrashIcon,
   ClockIcon,
-  AlertTriangleIcon,
   RefreshCwIcon,
   PackageIcon,
   ImageIcon,
@@ -27,7 +26,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { apiClient, type UserFile, type UserFilesResponse } from "@/lib/api-client";
 import { formatBytes } from "@/hooks/use-file-upload";
@@ -197,7 +195,7 @@ export function ReadyDownloads() {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">Ready to Download</CardTitle>
         </CardHeader>
@@ -210,7 +208,7 @@ export function ReadyDownloads() {
 
   if (error) {
     return (
-      <Card>
+      <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">Ready to Download</CardTitle>
@@ -228,7 +226,7 @@ export function ReadyDownloads() {
 
   if (userFiles.length === 0) {
     return (
-      <Card>
+      <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Ready to Download</CardTitle>
