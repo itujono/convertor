@@ -57,6 +57,23 @@ app.use(
 
 app.post("/webhooks/stripe", handleStripeWebhook);
 
+app.get("/api/debug/cors", async (c) => {
+  const corsOrigins = [
+    "https://www.useconvertor.com",
+    "https://useconvertor.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  ];
+
+  return c.json({
+    corsOrigins,
+    frontendUrl: process.env.FRONTEND_URL,
+    nodeEnv: process.env.NODE_ENV,
+    requestOrigin: c.req.header("origin"),
+  });
+});
+
 app.get("/api/debug/conversion-setup", async (c) => {
   try {
     let ffmpegPath = "Not found";
