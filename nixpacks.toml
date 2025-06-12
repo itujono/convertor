@@ -4,10 +4,10 @@ providers = []
 nixPkgs = ["bun", "ffmpeg", "nodejs_20"]
 
 [phases.install]
-cmd = "bun install --frozen-lockfile"
+cmd = "bun install --frozen-lockfile && cd packages/backend && bun install --production"
 
 [phases.build]
 cmd = "echo 'Build complete'"
 
 [start]
-cmd = "cd /app/packages/backend && bun run src/index.ts"
+cmd = "cd /app/packages/backend && NODE_PATH=/app/node_modules:/app/packages/backend/node_modules bun run src/index.ts"
