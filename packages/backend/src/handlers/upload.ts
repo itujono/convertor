@@ -49,6 +49,29 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
           `❌ File verification error on attempt ${attempt}:`,
           verificationError
         );
+
+        // If we get a 400 error, try an alternative verification method
+        if (verificationError.$metadata?.httpStatusCode === 400) {
+          console.log(
+            `🔄 Trying alternative verification method for attempt ${attempt}...`
+          );
+          try {
+            // Try to download just the first byte to verify file exists
+            const testBuffer = await downloadFile(uploadResult.filePath);
+            if (testBuffer && testBuffer.length > 0) {
+              console.log(
+                `✅ Alternative verification successful on attempt ${attempt}`
+              );
+              verificationSuccess = true;
+              break;
+            }
+          } catch (downloadError: any) {
+            console.warn(
+              `⚠️ Alternative verification also failed:`,
+              downloadError.message
+            );
+          }
+        }
       }
 
       if (attempt < maxVerificationAttempts) {
