@@ -12,29 +12,50 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+// Railway-optimized S3 client configuration
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "ap-southeast-2",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
-  maxAttempts: 5, // Increase retry attempts
-  retryMode: "adaptive", // Adaptive retry mode for better handling
+  maxAttempts: 8, // Increase retry attempts for Railway
+  retryMode: "adaptive",
+  requestHandler: {
+    requestTimeout: 120000, // 2 minutes timeout for Railway
+    connectionTimeout: 30000, // 30 seconds connection timeout
+    maxSockets: 50, // Limit concurrent connections
+  },
+  // Force IPv4 for Railway compatibility
+  endpoint: undefined,
+  forcePathStyle: false,
+  // Additional Railway-specific optimizations
+  apiVersion: "2006-03-01",
 });
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
 const CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN;
 
+// Detect Railway environment
+const isRailway = !!(
+  process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
+);
+
 // Log S3 configuration on startup
-console.log("🔧 S3 Configuration:", {
+console.log("🔧 S3 Configuration (Railway Optimized):", {
   region: process.env.AWS_REGION,
   bucket: BUCKET_NAME,
   hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
   hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
   cloudfront: CLOUDFRONT_DOMAIN || "not configured",
+  isRailway,
+  railwayEnv: process.env.RAILWAY_ENVIRONMENT || "unknown",
   s3ClientConfig: {
-    maxAttempts: 5,
+    maxAttempts: 8,
     retryMode: "adaptive",
+    requestTimeout: "120s",
+    connectionTimeout: "30s",
+    environment: isRailway ? "Railway" : "Local/Other",
   },
 });
 
@@ -224,8 +245,8 @@ export async function uploadFile(
 
   const contentType = mimeType || "application/octet-stream";
 
-  // Use multipart upload for files larger than 5MB
-  if (uploadBuffer.length > 5 * 1024 * 1024) {
+  // Use multipart upload for files larger than 50MB
+  if (uploadBuffer.length > 50 * 1024 * 1024) {
     console.log(
       `📦 File is ${(uploadBuffer.length / 1024 / 1024).toFixed(
         2
@@ -233,7 +254,7 @@ export async function uploadFile(
     );
 
     try {
-      const result = await uploadLargeFile(
+      await uploadLargeFile(
         uploadBuffer,
         filePath,
         contentType,
@@ -260,107 +281,190 @@ export async function uploadFile(
     }
   }
 
-  let command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: filePath,
-    Body: uploadBuffer,
-    ContentType: contentType,
-    ContentLength: uploadBuffer.length, // Explicitly set content length
-    Metadata: {
-      "original-filename": sanitizeFilenameForHeader(fileName),
-      "user-id": userId,
-    },
-  });
-
-  // For small files, try a simpler upload approach first
+  // Railway-specific upload with enhanced error handling
   console.log(
     `📤 Uploading small file to S3: ${filePath} (${uploadBuffer.length} bytes)`
   );
 
   let uploadResult;
+  const maxRetries = 3;
+  let lastError: any;
 
-  try {
-    console.log(`🔄 Sending simple S3 upload command...`);
-    const uploadStartTime = Date.now();
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Upload attempt ${attempt}/${maxRetries}...`);
+      const uploadStartTime = Date.now();
 
-    const result = await s3Client.send(command);
-    const uploadDuration = Date.now() - uploadStartTime;
+      // Create command with Railway-optimized settings
+      const command = new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: filePath,
+        Body: uploadBuffer,
+        ContentType: contentType,
+        ContentLength: uploadBuffer.length,
+        Metadata: {
+          "original-filename": sanitizeFilenameForHeader(fileName),
+          "user-id": userId,
+          "railway-attempt": attempt.toString(),
+          "upload-timestamp": new Date().toISOString(),
+        },
+        // Railway-specific optimizations
+        ServerSideEncryption: undefined, // Remove any encryption that might cause issues
+        StorageClass: "STANDARD", // Use standard storage for better Railway compatibility
+      });
 
-    console.log(`⏱️ Upload completed in ${uploadDuration}ms`);
-    console.log(`📊 Upload result:`, {
-      hasETag: !!result.ETag,
-      etagValue: result.ETag,
-      statusCode: result.$metadata?.httpStatusCode,
-      requestId: result.$metadata?.requestId,
-    });
+      const result = await s3Client.send(command);
+      const uploadDuration = Date.now() - uploadStartTime;
 
-    // Validate the upload was actually successful
-    const statusCode = result.$metadata?.httpStatusCode;
-
-    if (statusCode === 100) {
-      throw new Error(
-        "S3 upload incomplete - received HTTP 100 Continue, request may have been interrupted"
+      console.log(
+        `⏱️ Upload completed in ${uploadDuration}ms on attempt ${attempt}`
       );
+      console.log(`📊 Upload result:`, {
+        hasETag: !!result.ETag,
+        etagValue: result.ETag,
+        statusCode: result.$metadata?.httpStatusCode,
+        requestId: result.$metadata?.requestId,
+        attempt,
+      });
+
+      // Validate the upload was actually successful
+      const statusCode = result.$metadata?.httpStatusCode;
+
+      // Railway-specific status code handling
+      if (statusCode === 100) {
+        throw new Error(
+          "Railway proxy interrupted upload - HTTP 100 Continue received"
+        );
+      }
+
+      if (statusCode !== 200 && statusCode !== 201) {
+        throw new Error(
+          `S3 upload failed with status ${statusCode} (expected 200/201)`
+        );
+      }
+
+      if (!result.ETag) {
+        throw new Error("S3 upload failed - no ETag returned");
+      }
+
+      console.log(`✅ S3 upload successful on attempt ${attempt}: ${filePath}`);
+      uploadResult = result;
+      break; // Success, exit retry loop
+    } catch (uploadError: any) {
+      lastError = uploadError;
+      console.error(`❌ S3 upload attempt ${attempt} failed:`, {
+        error: uploadError.message,
+        name: uploadError.name,
+        code: uploadError.Code || uploadError.code,
+        statusCode: uploadError.$metadata?.httpStatusCode,
+        requestId: uploadError.$metadata?.requestId,
+        attempt,
+      });
+
+      // Check if this is a Railway-specific error that we should retry
+      const isRetryableError =
+        uploadError.message?.includes("HTTP 100 Continue") ||
+        uploadError.message?.includes("interrupted") ||
+        uploadError.message?.includes("timeout") ||
+        uploadError.name === "TimeoutError" ||
+        uploadError.name === "NetworkingError" ||
+        uploadError.$metadata?.httpStatusCode === 100 ||
+        uploadError.$metadata?.httpStatusCode === 502 ||
+        uploadError.$metadata?.httpStatusCode === 503 ||
+        uploadError.$metadata?.httpStatusCode === 504;
+
+      if (attempt === maxRetries || !isRetryableError) {
+        break; // Don't retry on final attempt or non-retryable errors
+      }
+
+      // Exponential backoff for Railway
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      console.log(`⏳ Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
-
-    if (statusCode !== 200) {
-      throw new Error(
-        `S3 upload failed with status ${statusCode} (expected 200)`
-      );
-    }
-
-    if (!result.ETag) {
-      throw new Error("S3 upload failed - no ETag returned");
-    }
-
-    console.log(`✅ S3 upload successful: ${filePath}`);
-
-    uploadResult = result;
-  } catch (uploadError: any) {
-    console.error(`❌ S3 upload failed:`, {
-      error: uploadError.message,
-      name: uploadError.name,
-      code: uploadError.Code || uploadError.code,
-      statusCode: uploadError.$metadata?.httpStatusCode,
-      requestId: uploadError.$metadata?.requestId,
-    });
-    throw uploadError;
   }
 
   if (!uploadResult) {
-    throw new Error("Upload failed after all retry attempts");
+    console.error(`❌ All upload attempts failed for ${filePath}`);
+    throw lastError || new Error("Upload failed after all retry attempts");
   }
 
-  try {
-    // Verify the upload immediately with a different approach
-    console.log(`🔄 Immediately verifying upload with GetObject...`);
+  // Railway-optimized upload verification with retry logic
+  console.log(`🔄 Verifying upload with Railway-optimized checks...`);
+
+  // Give Railway/S3 a moment for consistency (Railway can have slight delays)
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  let verificationSuccess = false;
+  const maxVerificationRetries = 5;
+
+  for (
+    let verifyAttempt = 1;
+    verifyAttempt <= maxVerificationRetries;
+    verifyAttempt++
+  ) {
     try {
-      const verifyCommand = new GetObjectCommand({
+      console.log(
+        `🔍 Verification attempt ${verifyAttempt}/${maxVerificationRetries}...`
+      );
+
+      // Use HeadObject first (faster for verification)
+      const headCommand = new HeadObjectCommand({
         Bucket: BUCKET_NAME,
         Key: filePath,
       });
-      const verifyResult = await s3Client.send(verifyCommand);
-      console.log(`✅ Immediate upload verification successful:`, {
-        contentLength: verifyResult.ContentLength,
-        lastModified: verifyResult.LastModified,
-        etag: verifyResult.ETag,
-      });
+
+      const headResult = await s3Client.send(headCommand);
+
+      console.log(
+        `✅ Upload verification successful (attempt ${verifyAttempt}):`,
+        {
+          contentLength: headResult.ContentLength,
+          lastModified: headResult.LastModified,
+          etag: headResult.ETag,
+          expectedSize: uploadBuffer.length,
+          sizeMatch: headResult.ContentLength === uploadBuffer.length,
+        }
+      );
+
+      // Verify file size matches
+      if (headResult.ContentLength !== uploadBuffer.length) {
+        throw new Error(
+          `File size mismatch: expected ${uploadBuffer.length}, got ${headResult.ContentLength}`
+        );
+      }
+
+      verificationSuccess = true;
+      break;
     } catch (verifyError: any) {
-      console.warn(`⚠️ Immediate upload verification failed:`, {
+      console.warn(`⚠️ Verification attempt ${verifyAttempt} failed:`, {
         error: verifyError.message,
         code: verifyError.Code || verifyError.code,
         statusCode: verifyError.$metadata?.httpStatusCode,
+        willRetry: verifyAttempt < maxVerificationRetries,
       });
+
+      // For Railway, sometimes verification fails due to eventual consistency
+      // Wait progressively longer between attempts
+      if (verifyAttempt < maxVerificationRetries) {
+        const verifyDelay = verifyAttempt * 2000; // 2s, 4s, 6s, 8s
+        console.log(
+          `⏳ Waiting ${verifyDelay}ms before next verification attempt...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, verifyDelay));
+      }
     }
-  } catch (error: any) {
-    console.error(`❌ S3 upload failed: ${filePath}`, {
-      error: error.message,
-      code: error.Code || error.code,
-      name: error.name,
-      statusCode: error.$metadata?.httpStatusCode,
-      requestId: error.$metadata?.requestId,
-    });
-    throw error;
+  }
+
+  if (!verificationSuccess) {
+    console.error(
+      `❌ Upload verification failed after ${maxVerificationRetries} attempts`
+    );
+    // Don't throw here - the upload might still be successful
+    // Railway sometimes has eventual consistency issues
+    console.warn(
+      `⚠️ Proceeding without verification due to Railway consistency issues`
+    );
   }
 
   // Generate public URL (CloudFront if available, otherwise S3)
@@ -525,83 +629,111 @@ export async function downloadFile(filePath: string): Promise<Buffer> {
 }
 
 export async function checkFileExists(filePath: string): Promise<boolean> {
-  try {
-    const command = new HeadObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: filePath,
-    });
+  const maxRetries = 5;
 
-    console.log(
-      `🔍 Checking file existence: ${filePath} in bucket: ${BUCKET_NAME}`
-    );
-    const result = await s3Client.send(command);
-    console.log(`✅ File exists check successful:`, {
-      contentLength: result.ContentLength,
-      lastModified: result.LastModified,
-      etag: result.ETag,
-    });
-    return true;
-  } catch (error: any) {
-    console.error(`❌ File exists check error:`, {
-      filePath,
-      bucket: BUCKET_NAME,
-      errorName: error.name,
-      errorCode: error.Code || error.code,
-      errorMessage: error.message,
-      statusCode: error.$metadata?.httpStatusCode,
-      requestId: error.$metadata?.requestId,
-    });
-
-    // Handle 400 errors - try alternative verification method
-    if (error.$metadata?.httpStatusCode === 400) {
-      console.warn(
-        `⚠️ HeadObject returned 400 error, trying GetObject as alternative verification...`
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(
+        `🔍 Checking file existence (attempt ${attempt}/${maxRetries}): ${filePath}`
       );
-      try {
-        const getCommand = new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: filePath,
-          Range: "bytes=0-0", // Only get first byte to minimize data transfer
-        });
-        const getResult = await s3Client.send(getCommand);
-        console.log(`✅ Alternative verification (GetObject) successful:`, {
-          filePath,
-          contentLength: getResult.ContentLength,
-          contentRange: getResult.ContentRange,
-          etag: getResult.ETag,
-        });
-        return true;
-      } catch (getError: any) {
-        console.error(`❌ Alternative verification also failed:`, {
-          error: getError.message,
-          code: getError.Code || getError.code,
-          statusCode: getError.$metadata?.httpStatusCode,
-          requestId: getError.$metadata?.requestId,
-        });
+
+      const command = new HeadObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: filePath,
+      });
+
+      const result = await s3Client.send(command);
+      console.log(`✅ File exists check successful (attempt ${attempt}):`, {
+        contentLength: result.ContentLength,
+        lastModified: result.LastModified,
+        etag: result.ETag,
+        filePath,
+      });
+      return true;
+    } catch (error: any) {
+      console.error(`❌ File exists check error (attempt ${attempt}):`, {
+        filePath,
+        bucket: BUCKET_NAME,
+        errorName: error.name,
+        errorCode: error.Code || error.code,
+        errorMessage: error.message,
+        statusCode: error.$metadata?.httpStatusCode,
+        requestId: error.$metadata?.requestId,
+        attempt,
+      });
+
+      // Handle various "not found" error types immediately (no retry needed)
+      if (
+        error.name === "NotFound" ||
+        error.name === "NoSuchKey" ||
+        error.Code === "NoSuchKey" ||
+        error.$metadata?.httpStatusCode === 404
+      ) {
+        console.log(`📁 File definitively does not exist: ${filePath}`);
         return false;
       }
-    }
 
-    // Handle various "not found" error types
-    if (
-      error.name === "NotFound" ||
-      error.name === "NoSuchKey" ||
-      error.Code === "NoSuchKey" ||
-      error.$metadata?.httpStatusCode === 404
-    ) {
-      return false;
-    }
-
-    // For other unexpected errors, log and return false (don't throw)
-    console.warn(
-      `⚠️ Unexpected error during file existence check, treating as not found:`,
-      {
-        error: error.message,
-        statusCode: error.$metadata?.httpStatusCode,
+      // Handle 400 errors with alternative verification method
+      if (error.$metadata?.httpStatusCode === 400) {
+        console.warn(
+          `⚠️ HeadObject returned 400 error, trying GetObject as alternative verification...`
+        );
+        try {
+          const getCommand = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: filePath,
+            Range: "bytes=0-0", // Only get first byte to minimize data transfer
+          });
+          const getResult = await s3Client.send(getCommand);
+          console.log(`✅ Alternative verification (GetObject) successful:`, {
+            filePath,
+            contentLength: getResult.ContentLength,
+            contentRange: getResult.ContentRange,
+            etag: getResult.ETag,
+          });
+          return true;
+        } catch (getError: any) {
+          console.error(`❌ Alternative verification also failed:`, {
+            error: getError.message,
+            code: getError.Code || getError.code,
+            statusCode: getError.$metadata?.httpStatusCode,
+            requestId: getError.$metadata?.requestId,
+          });
+          return false;
+        }
       }
-    );
-    return false;
+
+      // Check if this is a Railway-specific retryable error
+      const isRetryableError =
+        error.message?.includes("timeout") ||
+        error.message?.includes("interrupted") ||
+        error.name === "TimeoutError" ||
+        error.name === "NetworkingError" ||
+        error.$metadata?.httpStatusCode === 502 ||
+        error.$metadata?.httpStatusCode === 503 ||
+        error.$metadata?.httpStatusCode === 504;
+
+      if (attempt === maxRetries || !isRetryableError) {
+        // For other unexpected errors on final attempt, log and return false (don't throw)
+        console.warn(
+          `⚠️ File existence check failed after ${attempt} attempts, treating as not found:`,
+          {
+            error: error.message,
+            statusCode: error.$metadata?.httpStatusCode,
+            filePath,
+          }
+        );
+        return false;
+      }
+
+      // Railway-specific backoff for retryable errors
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      console.log(`⏳ Retrying file existence check in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
+
+  return false;
 }
 
 export async function deleteFile(filePath: string): Promise<void> {

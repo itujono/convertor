@@ -7,7 +7,7 @@ nixPkgs = ["bun", "ffmpeg", "nodejs_20"]
 cmd = "rm -f pnpm-lock.yaml && bun install --frozen-lockfile"
 
 [phases.build]
-cmd = "echo 'Build complete'"
+cmd = "echo 'Dependencies installed via workspaces'"
 
 [start]
 cmd = "cd /app/packages/backend && bun run src/index.ts"
