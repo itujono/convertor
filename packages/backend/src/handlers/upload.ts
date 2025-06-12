@@ -5,6 +5,7 @@ import {
   checkFileExists,
   downloadFile,
 } from "../utils/aws-storage";
+import { queueS3Upload, getUploadStatus } from "../utils/async-s3-upload";
 import type { Variables } from "../utils/types";
 
 export async function uploadHandler(c: Context<{ Variables: Variables }>) {
@@ -22,89 +23,61 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
     }
 
     console.log(
-      `Uploading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
+      `Queuing file upload: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
     );
 
-    const uploadResult = await uploadFile(file, file.name, user.id, file.type);
+    // For small files (<5MB), use synchronous upload
+    if (file.size < 5 * 1024 * 1024) {
+      console.log(`📤 Small file detected, using synchronous upload...`);
 
-    console.log("File uploaded to S3 successfully:", uploadResult.filePath);
-
-    // Verify file is accessible immediately after upload with retry logic
-    console.log("🔍 Verifying file accessibility...");
-    let verificationSuccess = false;
-    const maxVerificationAttempts = 3;
-
-    for (let attempt = 1; attempt <= maxVerificationAttempts; attempt++) {
       try {
-        const fileExists = await checkFileExists(uploadResult.filePath);
-        if (fileExists) {
-          console.log(`✅ File verification successful on attempt ${attempt}`);
-          verificationSuccess = true;
-          break;
-        } else {
-          console.warn(`⚠️ File not found on attempt ${attempt}`);
-        }
-      } catch (verificationError: any) {
-        console.error(
-          `❌ File verification error on attempt ${attempt}:`,
-          verificationError
+        const uploadResult = await uploadFile(
+          file,
+          file.name,
+          user.id,
+          file.type
         );
-
-        // If we get a 400 error, try an alternative verification method
-        if (verificationError.$metadata?.httpStatusCode === 400) {
-          console.log(
-            `🔄 Trying alternative verification method for attempt ${attempt}...`
-          );
-          try {
-            // Try to download just the first byte to verify file exists
-            const testBuffer = await downloadFile(uploadResult.filePath);
-            if (testBuffer && testBuffer.length > 0) {
-              console.log(
-                `✅ Alternative verification successful on attempt ${attempt}`
-              );
-              verificationSuccess = true;
-              break;
-            }
-          } catch (downloadError: any) {
-            console.warn(
-              `⚠️ Alternative verification also failed:`,
-              downloadError.message
-            );
-          }
-        }
-      }
-
-      if (attempt < maxVerificationAttempts) {
-        const delay = 1000 * attempt; // 1s, 2s, 3s delays
         console.log(
-          `⏳ Waiting ${delay}ms before next verification attempt...`
+          "✅ Small file uploaded to S3 successfully:",
+          uploadResult.filePath
         );
-        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        return c.json({
+          message: "File uploaded successfully",
+          filePath: uploadResult.filePath,
+          fileName: uploadResult.fileName,
+          fileSize: uploadResult.fileSize,
+          publicUrl: uploadResult.publicUrl,
+        });
+      } catch (uploadError: any) {
+        console.error(
+          "❌ Small file upload failed, falling back to async upload:",
+          uploadError.message
+        );
+        // Fall through to async upload as fallback
       }
     }
 
-    if (!verificationSuccess) {
-      console.error(
-        "❌ File upload verification failed - file not accessible after upload"
-      );
-      return c.json(
-        {
-          error:
-            "Upload verification failed: File was uploaded but is not accessible. Please try again.",
-        },
-        500
-      );
-    }
+    // For large files or if small file upload failed, use asynchronous upload
+    console.log(`📦 Using asynchronous upload for file: ${file.name}`);
 
-    // Don't schedule immediate cleanup - files will be cleaned up after conversion
-    // or by the expired files cleanup job
+    const { uploadId, localPath } = await queueS3Upload(
+      file,
+      file.name,
+      user.id,
+      file.type
+    );
 
+    console.log(`✅ File queued for upload with ID: ${uploadId}`);
+
+    // Return immediately with upload ID for status checking
     return c.json({
-      message: "File uploaded successfully",
-      filePath: uploadResult.filePath,
-      fileName: uploadResult.fileName,
-      fileSize: uploadResult.fileSize,
-      publicUrl: uploadResult.publicUrl,
+      message: "File queued for upload",
+      uploadId,
+      fileName: file.name,
+      fileSize: file.size,
+      status: "queued",
+      // Note: filePath and publicUrl will be available after async upload completes
     });
   } catch (error: any) {
     console.error("Upload error:", error);

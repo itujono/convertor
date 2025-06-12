@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
+import { uploadStatusHandler } from "./handlers/upload-status";
 import {
   convertHandler,
   checkBatchLimitHandler,
@@ -158,6 +159,7 @@ app.use("/api/*", authMiddleware);
 app.get("/api/health", healthHandler);
 app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
+app.get("/api/upload/status/:uploadId", uploadStatusHandler);
 app.post("/api/convert", convertHandler);
 app.get("/api/convert/progress/*", getConversionProgressHandler);
 app.post("/api/check-batch-limit", checkBatchLimitHandler);

@@ -13,8 +13,10 @@ import {
   scheduleFileCleanup,
   checkFileExists,
 } from "../utils/aws-storage";
+import { getUploadStatus } from "../utils/async-s3-upload";
 import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
+import crypto from "crypto";
 
 const ffmpeg = require("fluent-ffmpeg");
 
@@ -119,20 +121,78 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
   try {
     const user = c.get("user");
-    const { filePath, format, quality = "medium" } = await c.req.json();
+    const {
+      filePath,
+      uploadId,
+      format,
+      quality = "medium",
+    } = await c.req.json();
 
-    if (!filePath || !format) {
-      return c.json({ error: "Missing filePath or format" }, 400);
+    if ((!filePath && !uploadId) || !format) {
+      return c.json({ error: "Missing filePath/uploadId or format" }, 400);
+    }
+
+    let actualFilePath = filePath;
+
+    // If uploadId is provided, check if the async upload is completed
+    if (uploadId) {
+      console.log(`🔍 Checking async upload status for: ${uploadId}`);
+
+      const uploadStatus = getUploadStatus(uploadId);
+
+      if (!uploadStatus) {
+        return c.json({ error: "Upload not found" }, 404);
+      }
+
+      if (
+        uploadStatus.status === "pending" ||
+        uploadStatus.status === "uploading"
+      ) {
+        return c.json(
+          {
+            error: "Upload still in progress",
+            status: uploadStatus.status,
+            message: "Please wait for the upload to complete before converting",
+          },
+          202
+        );
+      }
+
+      if (uploadStatus.status === "failed") {
+        return c.json(
+          {
+            error: "Upload failed",
+            details: uploadStatus.error,
+          },
+          400
+        );
+      }
+
+      if (uploadStatus.status === "completed") {
+        if (!uploadStatus.s3FilePath) {
+          return c.json(
+            {
+              error: "Upload completed but S3 file path not available",
+            },
+            500
+          );
+        }
+
+        actualFilePath = uploadStatus.s3FilePath;
+        console.log(
+          `✅ Async upload completed, using filePath: ${actualFilePath}`
+        );
+      }
     }
 
     await checkConversionLimit(user.id);
     console.log("✅ Conversion limit check passed");
 
-    progressKey = getProgressKey(user.id, filePath);
+    progressKey = getProgressKey(user.id, actualFilePath);
     conversionProgress.set(progressKey, { progress: 0, status: "starting" });
 
     console.log(
-      `Starting conversion for user ${user.id}: ${filePath} -> ${format} (${quality})`
+      `Starting conversion for user ${user.id}: ${actualFilePath} -> ${format} (${quality})`
     );
 
     const tempDir = join(process.cwd(), "temp");
@@ -140,9 +200,9 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     await mkdir(tempDir, { recursive: true });
     console.log("✅ Temp directory created");
 
-    console.log("⬇️ Starting S3 download for:", filePath);
+    console.log("⬇️ Starting S3 download for:", actualFilePath);
     console.log("📋 S3 Key details:", {
-      key: filePath,
+      key: actualFilePath,
       bucket: process.env.AWS_S3_BUCKET,
       region: process.env.AWS_REGION,
     });
@@ -159,7 +219,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       );
 
       try {
-        fileExists = await checkFileExists(filePath);
+        fileExists = await checkFileExists(actualFilePath);
         console.log(`📋 File existence check result: ${fileExists}`);
 
         if (fileExists) {
@@ -185,7 +245,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     if (!fileExists) {
       console.error(
         "❌ File does not exist in S3 after all attempts:",
-        filePath
+        actualFilePath
       );
       return c.json(
         {
@@ -197,12 +257,12 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     let fileBuffer: Buffer;
     try {
-      fileBuffer = await downloadFile(filePath);
+      fileBuffer = await downloadFile(actualFilePath);
       console.log("✅ S3 download completed, buffer size:", fileBuffer.length);
     } catch (downloadError: any) {
       console.error("❌ S3 download failed:", {
         error: downloadError.message,
-        filePath,
+        filePath: actualFilePath,
         errorCode: downloadError.Code || downloadError.code,
         errorName: downloadError.name,
       });
@@ -222,7 +282,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       throw downloadError; // Re-throw other S3 errors
     }
 
-    const originalFileName = filePath.split("/").pop() || "file";
+    const originalFileName = actualFilePath.split("/").pop() || "file";
     const baseName = originalFileName.split(".")[0];
     const fileExtension = originalFileName.split(".").pop()?.toLowerCase();
     tempInputPath = join(tempDir, `${Date.now()}_input_${originalFileName}`);

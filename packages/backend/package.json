@@ -22,6 +22,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/fluent-ffmpeg": "^2.1.27",
-    "@types/node": "^22.15.21"
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.2"
   }
 }

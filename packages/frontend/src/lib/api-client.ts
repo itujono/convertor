@@ -94,6 +94,17 @@ class ApiClient {
     });
   }
 
+  async convertFileWithUploadId(uploadId: string, format: string, quality: string = "medium") {
+    return this.request("/api/convert", {
+      method: "POST",
+      body: JSON.stringify({ uploadId, format, quality }),
+    });
+  }
+
+  async checkUploadStatus(uploadId: string) {
+    return this.request(`/api/upload/status/${uploadId}`);
+  }
+
   async checkBatchLimit(fileCount: number) {
     return this.request("/api/check-batch-limit", {
       method: "POST",
@@ -227,7 +238,8 @@ export interface User {
 
 export interface UploadResponse {
   message: string;
-  filePath: string;
+  filePath?: string; // For synchronous uploads (small files)
+  uploadId?: string; // For asynchronous uploads (large files)
   fileName: string;
   fileSize: number;
 }
@@ -278,4 +290,16 @@ export interface UserFile {
 export interface UserFilesResponse {
   files: UserFile[];
   count: number;
+}
+
+export interface UploadStatusResponse {
+  uploadId: string;
+  status: "pending" | "uploading" | "completed" | "failed";
+  fileName: string;
+  fileSize: number;
+  filePath?: string; // Available when status is "completed"
+  publicUrl?: string; // Available when status is "completed"
+  error?: string; // Available when status is "failed"
+  createdAt: string;
+  completedAt?: string;
 }

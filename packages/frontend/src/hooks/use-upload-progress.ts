@@ -22,7 +22,7 @@ export interface UploadProgress {
 const uploadFile = async (
   file: File,
   onProgress: (progress: number) => void,
-  onComplete: (filePath: string) => void,
+  onComplete: (filePath: string, uploadId?: string) => void,
   onError: (error: string) => void,
   abortSignal?: AbortSignal,
 ) => {
@@ -52,7 +52,17 @@ const uploadFile = async (
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
       onProgress(100);
-      onComplete(response.filePath);
+
+      // Handle both sync (filePath) and async (uploadId) responses
+      if (response.filePath) {
+        // Synchronous upload completed
+        onComplete(response.filePath);
+      } else if (response.uploadId) {
+        // Asynchronous upload started - pass the uploadId
+        onComplete("", response.uploadId);
+      } else {
+        throw new Error("Invalid upload response - missing filePath and uploadId");
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
@@ -64,7 +74,8 @@ const uploadFile = async (
 };
 
 const convertFile = async (
-  filePath: string,
+  fileIdentifier: string, // Either filePath or uploadId
+  uploadId: string | undefined, // If provided, this is an async upload
   format: string,
   quality: string,
   onComplete: (downloadUrl: string, outputPath: string) => void,
@@ -77,6 +88,37 @@ const convertFile = async (
   try {
     if (abortSignal?.aborted) return;
 
+    let actualFilePath = fileIdentifier;
+
+    // If we have an uploadId, we need to wait for async upload to complete first
+    if (uploadId) {
+      onProgress(10); // Start with some progress
+
+      // Poll upload status until complete
+      while (true) {
+        if (abortSignal?.aborted) return;
+
+        try {
+          const statusResponse = await apiClient.checkUploadStatus(uploadId);
+
+          if (statusResponse.status === "completed") {
+            onProgress(50); // Upload complete, starting conversion
+            actualFilePath = statusResponse.filePath || fileIdentifier;
+            break;
+          } else if (statusResponse.status === "failed") {
+            throw new Error(statusResponse.error || "Upload failed");
+          }
+
+          // Still uploading, wait a bit
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        } catch (error) {
+          throw new Error(
+            "Failed to check upload status: " + (error instanceof Error ? error.message : "Unknown error"),
+          );
+        }
+      }
+    }
+
     progressInterval = setInterval(async () => {
       if (abortSignal?.aborted) {
         if (progressInterval) clearInterval(progressInterval);
@@ -84,17 +126,22 @@ const convertFile = async (
       }
 
       try {
-        const encodedFilePath = encodeURIComponent(filePath);
-        const progressUrl = `${API_BASE_URL}/api/convert/progress/${encodedFilePath}`;
+        // Only poll progress if we have an actual file path (not uploadId)
+        if (actualFilePath && !actualFilePath.match(/^\d+-[a-z0-9]+$/)) {
+          const encodedFilePath = encodeURIComponent(actualFilePath);
+          const progressUrl = `${API_BASE_URL}/api/convert/progress/${encodedFilePath}`;
 
-        const response = await fetch(progressUrl, {
-          headers: await getAuthHeaders(),
-        });
+          const response = await fetch(progressUrl, {
+            headers: await getAuthHeaders(),
+          });
 
-        if (response.ok) {
-          const progressData = await response.json();
-          if (progressData.progress !== undefined) {
-            onProgress(progressData.progress);
+          if (response.ok) {
+            const progressData = await response.json();
+            if (progressData.progress !== undefined) {
+              // For async uploads, start progress from 50% (upload complete)
+              const adjustedProgress = uploadId ? 50 + progressData.progress * 0.5 : progressData.progress;
+              onProgress(adjustedProgress);
+            }
           }
         }
       } catch (error) {
@@ -102,7 +149,10 @@ const convertFile = async (
       }
     }, 1000);
 
-    const response = await apiClient.convertFile(filePath, format, quality);
+    // Call the appropriate conversion method
+    const response = uploadId
+      ? await apiClient.convertFileWithUploadId(uploadId, format, quality)
+      : await apiClient.convertFile(fileIdentifier, format, quality);
 
     if (progressInterval) clearInterval(progressInterval);
     onComplete(response.downloadUrl, response.outputPath);
@@ -196,7 +246,7 @@ export function useUploadProgress() {
         (progress) => {
           setUploadProgress((prev) => prev.map((item) => (item.fileId === file.id ? { ...item, progress } : item)));
         },
-        (filePath) => {
+        (filePath, uploadId) => {
           setUploadProgress((prev) =>
             prev.map((item) => (item.fileId === file.id ? { ...item, completed: true, converting: true } : item)),
           );
@@ -207,7 +257,8 @@ export function useUploadProgress() {
             // Add a small delay before starting conversion to allow S3 consistency
             setTimeout(() => {
               convertFile(
-                filePath,
+                filePath || uploadId || "", // Use filePath if available, otherwise uploadId
+                uploadId, // Pass uploadId separately
                 targetFormat,
                 targetQuality,
                 (downloadUrl, outputPath) => {

@@ -5,6 +5,10 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -29,7 +33,7 @@ console.log("🔧 S3 Configuration:", {
   hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
   cloudfront: CLOUDFRONT_DOMAIN || "not configured",
   s3ClientConfig: {
-    maxAttempts: 3,
+    maxAttempts: 5,
     retryMode: "adaptive",
   },
 });
@@ -87,6 +91,108 @@ function sanitizeFilenameForHeader(filename: string): string {
     .trim();
 }
 
+// Multipart upload for larger files (>5MB)
+async function uploadLargeFile(
+  buffer: Buffer,
+  filePath: string,
+  mimeType: string,
+  fileName: string,
+  userId: string
+): Promise<any> {
+  const PART_SIZE = 5 * 1024 * 1024; // 5MB parts
+  const totalParts = Math.ceil(buffer.length / PART_SIZE);
+
+  console.log(
+    `🔄 Starting multipart upload: ${totalParts} parts of ${PART_SIZE} bytes each`
+  );
+
+  // Create multipart upload
+  const createMultipartCommand = new CreateMultipartUploadCommand({
+    Bucket: BUCKET_NAME,
+    Key: filePath,
+    ContentType: mimeType,
+    Metadata: {
+      "original-filename": sanitizeFilenameForHeader(fileName),
+      "user-id": userId,
+    },
+  });
+
+  const multipartUpload = await s3Client.send(createMultipartCommand);
+  const uploadId = multipartUpload.UploadId!;
+
+  console.log(`📝 Created multipart upload with ID: ${uploadId}`);
+
+  try {
+    const uploadPromises = [];
+
+    for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+      const start = (partNumber - 1) * PART_SIZE;
+      const end = Math.min(start + PART_SIZE, buffer.length);
+      const partBuffer = buffer.slice(start, end);
+
+      console.log(
+        `📤 Uploading part ${partNumber}/${totalParts} (${partBuffer.length} bytes)`
+      );
+
+      const uploadPartCommand = new UploadPartCommand({
+        Bucket: BUCKET_NAME,
+        Key: filePath,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+        Body: partBuffer,
+        ContentLength: partBuffer.length,
+      });
+
+      uploadPromises.push(
+        s3Client.send(uploadPartCommand).then((result) => ({
+          ETag: result.ETag!,
+          PartNumber: partNumber,
+        }))
+      );
+    }
+
+    console.log(`⏳ Waiting for all ${totalParts} parts to complete...`);
+    const completedParts = await Promise.all(uploadPromises);
+
+    console.log(
+      `✅ All parts uploaded successfully, completing multipart upload...`
+    );
+
+    // Complete the multipart upload
+    const completeMultipartCommand = new CompleteMultipartUploadCommand({
+      Bucket: BUCKET_NAME,
+      Key: filePath,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: completedParts,
+      },
+    });
+
+    const result = await s3Client.send(completeMultipartCommand);
+    console.log(`🎉 Multipart upload completed successfully!`);
+
+    return result;
+  } catch (error) {
+    console.error(`❌ Multipart upload failed, aborting...`);
+
+    // Abort the multipart upload on failure
+    try {
+      await s3Client.send(
+        new AbortMultipartUploadCommand({
+          Bucket: BUCKET_NAME,
+          Key: filePath,
+          UploadId: uploadId,
+        })
+      );
+      console.log(`🗑️ Multipart upload aborted successfully`);
+    } catch (abortError) {
+      console.error(`❌ Failed to abort multipart upload:`, abortError);
+    }
+
+    throw error;
+  }
+}
+
 export async function uploadFile(
   file: Buffer | Uint8Array | File,
   fileName: string,
@@ -112,13 +218,53 @@ export async function uploadFile(
     bufferLength: uploadBuffer.length,
     originalLength: fileBuffer.length,
     bufferType: typeof uploadBuffer,
+    sizeCategory:
+      uploadBuffer.length > 5 * 1024 * 1024 ? "large (>5MB)" : "small (<5MB)",
   });
+
+  const contentType = mimeType || "application/octet-stream";
+
+  // Use multipart upload for files larger than 5MB
+  if (uploadBuffer.length > 5 * 1024 * 1024) {
+    console.log(
+      `📦 File is ${(uploadBuffer.length / 1024 / 1024).toFixed(
+        2
+      )}MB, using multipart upload`
+    );
+
+    try {
+      const result = await uploadLargeFile(
+        uploadBuffer,
+        filePath,
+        contentType,
+        fileName,
+        userId
+      );
+
+      // Generate public URL (CloudFront if available, otherwise S3)
+      const publicUrl = CLOUDFRONT_DOMAIN
+        ? `https://${CLOUDFRONT_DOMAIN}/${filePath}`
+        : `https://${BUCKET_NAME}.s3.${
+            process.env.AWS_REGION || "us-east-1"
+          }.amazonaws.com/${filePath}`;
+
+      return {
+        filePath,
+        fileName: uniqueFileName,
+        fileSize: uploadBuffer.length,
+        publicUrl,
+      };
+    } catch (error) {
+      console.error(`❌ Multipart upload failed:`, error);
+      throw error;
+    }
+  }
 
   let command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: filePath,
     Body: uploadBuffer,
-    ContentType: mimeType || "application/octet-stream",
+    ContentType: contentType,
     ContentLength: uploadBuffer.length, // Explicitly set content length
     Metadata: {
       "original-filename": sanitizeFilenameForHeader(fileName),
@@ -126,101 +272,59 @@ export async function uploadFile(
     },
   });
 
-  // Retry upload with exponential backoff
-  const maxUploadRetries = 3;
+  // For small files, try a simpler upload approach first
+  console.log(
+    `📤 Uploading small file to S3: ${filePath} (${uploadBuffer.length} bytes)`
+  );
+
   let uploadResult;
 
-  for (let attempt = 1; attempt <= maxUploadRetries; attempt++) {
-    try {
-      console.log(
-        `📤 Uploading to S3 (attempt ${attempt}/${maxUploadRetries}): ${filePath} (${uploadBuffer.length} bytes)`
+  try {
+    console.log(`🔄 Sending simple S3 upload command...`);
+    const uploadStartTime = Date.now();
+
+    const result = await s3Client.send(command);
+    const uploadDuration = Date.now() - uploadStartTime;
+
+    console.log(`⏱️ Upload completed in ${uploadDuration}ms`);
+    console.log(`📊 Upload result:`, {
+      hasETag: !!result.ETag,
+      etagValue: result.ETag,
+      statusCode: result.$metadata?.httpStatusCode,
+      requestId: result.$metadata?.requestId,
+    });
+
+    // Validate the upload was actually successful
+    const statusCode = result.$metadata?.httpStatusCode;
+
+    if (statusCode === 100) {
+      throw new Error(
+        "S3 upload incomplete - received HTTP 100 Continue, request may have been interrupted"
       );
-      console.log(`📋 Upload command details:`, {
-        bucket: BUCKET_NAME,
-        key: filePath,
-        contentType: mimeType || "application/octet-stream",
-        bufferSize: uploadBuffer.length,
-        contentLength: command.input.ContentLength,
-        hasBody: !!command.input.Body,
-        bodyType: typeof command.input.Body,
-        bodyLength: Buffer.isBuffer(command.input.Body)
-          ? command.input.Body.length
-          : "unknown",
-        attempt,
-      });
-
-      console.log(`🔄 Sending S3 upload command...`);
-
-      // Add a timeout wrapper to catch hanging uploads
-      const uploadPromise = s3Client.send(command);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error("S3 upload timeout after 30 seconds"));
-        }, 30000);
-      });
-
-      const result = await Promise.race([uploadPromise, timeoutPromise]);
-
-      console.log(`📊 Raw S3 upload result (attempt ${attempt}):`, {
-        result: result,
-        metadata: result.$metadata,
-        hasETag: !!result.ETag,
-        etagValue: result.ETag,
-      });
-
-      // Validate the upload was actually successful
-      if (result.$metadata?.httpStatusCode !== 200) {
-        throw new Error(
-          `S3 upload failed with status ${result.$metadata?.httpStatusCode} (expected 200)`
-        );
-      }
-
-      if (!result.ETag) {
-        throw new Error("S3 upload failed - no ETag returned");
-      }
-
-      console.log(`✅ S3 upload successful: ${filePath}`, {
-        etag: result.ETag,
-        versionId: result.VersionId,
-        serverSideEncryption: result.ServerSideEncryption,
-        requestId: result.$metadata?.requestId,
-        httpStatusCode: result.$metadata?.httpStatusCode,
-      });
-
-      uploadResult = result;
-      break; // Success - exit retry loop
-    } catch (uploadError: any) {
-      console.error(`❌ S3 upload attempt ${attempt} failed:`, {
-        error: uploadError.message,
-        code: uploadError.Code || uploadError.code,
-        name: uploadError.name,
-        statusCode: uploadError.$metadata?.httpStatusCode,
-        requestId: uploadError.$metadata?.requestId,
-        attempt,
-      });
-
-      if (attempt === maxUploadRetries) {
-        throw uploadError; // Final attempt failed
-      }
-
-      // Wait before retry with exponential backoff
-      const retryDelay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
-      console.log(`⏳ Retrying upload in ${retryDelay}ms...`);
-      await new Promise((resolve) => setTimeout(resolve, retryDelay));
-
-      // Recreate command for retry (in case it's consumed)
-      command = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: filePath,
-        Body: uploadBuffer,
-        ContentType: mimeType || "application/octet-stream",
-        ContentLength: uploadBuffer.length,
-        Metadata: {
-          "original-filename": sanitizeFilenameForHeader(fileName),
-          "user-id": userId,
-        },
-      });
     }
+
+    if (statusCode !== 200) {
+      throw new Error(
+        `S3 upload failed with status ${statusCode} (expected 200)`
+      );
+    }
+
+    if (!result.ETag) {
+      throw new Error("S3 upload failed - no ETag returned");
+    }
+
+    console.log(`✅ S3 upload successful: ${filePath}`);
+
+    uploadResult = result;
+  } catch (uploadError: any) {
+    console.error(`❌ S3 upload failed:`, {
+      error: uploadError.message,
+      name: uploadError.name,
+      code: uploadError.Code || uploadError.code,
+      statusCode: uploadError.$metadata?.httpStatusCode,
+      requestId: uploadError.$metadata?.requestId,
+    });
+    throw uploadError;
   }
 
   if (!uploadResult) {
