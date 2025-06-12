@@ -28,8 +28,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.820.0",
     "@aws-sdk/s3-request-presigner": "^3.820.0",
-    "@neondatabase/serverless": "^1.0.0",
-    "drizzle-orm": "^0.43.1",
     "pg": "^8.16.0"
   }
 }
