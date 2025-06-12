@@ -11,6 +11,7 @@ import {
   uploadConvertedFile,
   createSignedDownloadUrl,
   scheduleFileCleanup,
+  checkFileExists,
 } from "../utils/aws-storage";
 import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
@@ -145,6 +146,54 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       bucket: process.env.AWS_S3_BUCKET,
       region: process.env.AWS_REGION,
     });
+
+    // Add a longer delay and retry logic for S3 eventual consistency
+    console.log("⏳ Waiting for S3 consistency with retry logic...");
+
+    let fileExists = false;
+    const maxConsistencyAttempts = 5;
+
+    for (let attempt = 1; attempt <= maxConsistencyAttempts; attempt++) {
+      console.log(
+        `🔍 Checking if file exists in S3 (attempt ${attempt}/${maxConsistencyAttempts})...`
+      );
+
+      try {
+        fileExists = await checkFileExists(filePath);
+        console.log(`📋 File existence check result: ${fileExists}`);
+
+        if (fileExists) {
+          console.log(`✅ File found on attempt ${attempt}`);
+          break;
+        }
+      } catch (error: any) {
+        console.error(
+          `❌ File existence check error on attempt ${attempt}:`,
+          error
+        );
+      }
+
+      if (attempt < maxConsistencyAttempts) {
+        const delay = 2000 * attempt; // 2s, 4s, 6s, 8s delays
+        console.log(
+          `⏳ File not found, waiting ${delay}ms before next attempt...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    if (!fileExists) {
+      console.error(
+        "❌ File does not exist in S3 after all attempts:",
+        filePath
+      );
+      return c.json(
+        {
+          error: `File not found: The uploaded file could not be found in storage after multiple attempts. This may happen if there was an upload issue or the file was already processed. Please try uploading the file again.`,
+        },
+        404
+      );
+    }
 
     let fileBuffer: Buffer;
     try {

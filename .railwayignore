@@ -1,0 +1,54 @@
+# Node modules - Railway will install these
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Lock files - Railway handles dependencies
+bun.lock
+package-lock.json
+yarn.lock
+
+# Build artifacts
+.next/
+dist/
+build/
+out/
+
+# Cache directories
+.cache/
+.parcel-cache/
+.nuxt/
+.vuepress/dist/
+
+# Development files
+.git/
+.cursor/
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Coverage and test files
+coverage/
+.nyc_output/
+.jest/
+
+# Uploads directory (if it exists locally)
+uploads/
+packages/backend/uploads/
+packages/backend/temp/ 

@@ -204,41 +204,44 @@ export function useUploadProgress() {
           const targetFormat = selectedFormats[file.id];
           const targetQuality = selectedQualities[file.id] || "medium";
           if (targetFormat) {
-            convertFile(
-              filePath,
-              targetFormat,
-              targetQuality,
-              (downloadUrl, outputPath) => {
-                const fullDownloadUrl = downloadUrl.startsWith("/") ? `${API_BASE_URL}${downloadUrl}` : downloadUrl;
+            // Add a small delay before starting conversion to allow S3 consistency
+            setTimeout(() => {
+              convertFile(
+                filePath,
+                targetFormat,
+                targetQuality,
+                (downloadUrl, outputPath) => {
+                  const fullDownloadUrl = downloadUrl.startsWith("/") ? `${API_BASE_URL}${downloadUrl}` : downloadUrl;
 
-                setUploadProgress((prev) =>
-                  prev.map((item) =>
-                    item.fileId === file.id
-                      ? {
-                          ...item,
-                          converting: false,
-                          converted: true,
-                          downloadUrl: fullDownloadUrl,
-                          convertedFileName: downloadUrl.split("/").pop(),
-                          convertedFilePath: outputPath,
-                          conversionProgress: 100,
-                        }
-                      : item,
-                  ),
-                );
-              },
-              (error) => {
-                setUploadProgress((prev) =>
-                  prev.map((item) => (item.fileId === file.id ? { ...item, converting: false, error } : item)),
-                );
-              },
-              (progress) => {
-                setUploadProgress((prev) =>
-                  prev.map((item) => (item.fileId === file.id ? { ...item, conversionProgress: progress } : item)),
-                );
-              },
-              controller.signal,
-            );
+                  setUploadProgress((prev) =>
+                    prev.map((item) =>
+                      item.fileId === file.id
+                        ? {
+                            ...item,
+                            converting: false,
+                            converted: true,
+                            downloadUrl: fullDownloadUrl,
+                            convertedFileName: downloadUrl.split("/").pop(),
+                            convertedFilePath: outputPath,
+                            conversionProgress: 100,
+                          }
+                        : item,
+                    ),
+                  );
+                },
+                (error) => {
+                  setUploadProgress((prev) =>
+                    prev.map((item) => (item.fileId === file.id ? { ...item, converting: false, error } : item)),
+                  );
+                },
+                (progress) => {
+                  setUploadProgress((prev) =>
+                    prev.map((item) => (item.fileId === file.id ? { ...item, conversionProgress: progress } : item)),
+                  );
+                },
+                controller.signal,
+              );
+            }, 3000); // 3 second delay
           }
         },
         (error) => {

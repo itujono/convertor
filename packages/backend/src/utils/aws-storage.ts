@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -13,6 +14,8 @@ const s3Client = new S3Client({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
+  maxAttempts: 3, // Built-in retry mechanism
+  retryMode: "adaptive", // Adaptive retry mode for better handling
 });
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
@@ -63,7 +66,21 @@ export async function uploadFile(
     },
   });
 
-  await s3Client.send(command);
+  try {
+    console.log(`📤 Uploading to S3: ${filePath} (${fileBuffer.length} bytes)`);
+    const result = await s3Client.send(command);
+    console.log(`✅ S3 upload successful: ${filePath}`, {
+      etag: result.ETag,
+      versionId: result.VersionId,
+    });
+  } catch (error: any) {
+    console.error(`❌ S3 upload failed: ${filePath}`, {
+      error: error.message,
+      code: error.Code || error.code,
+      name: error.name,
+    });
+    throw error;
+  }
 
   // Generate public URL (CloudFront if available, otherwise S3)
   const publicUrl = CLOUDFRONT_DOMAIN
@@ -142,48 +159,109 @@ export async function createSignedDownloadUrl(
 }
 
 export async function downloadFile(filePath: string): Promise<Buffer> {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: filePath,
-  });
+  const maxRetries = 5;
+  const baseDelay = 1000; // 1 second
 
-  const downloadPromise = s3Client.send(command);
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("S3 download timeout after 2 minutes"));
-    }, 2 * 60 * 1000); // 2 minutes
-  });
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: filePath,
+      });
 
-  const response = (await Promise.race([
-    downloadPromise,
-    timeoutPromise,
-  ])) as any;
+      const downloadPromise = s3Client.send(command);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("S3 download timeout after 2 minutes"));
+        }, 2 * 60 * 1000); // 2 minutes
+      });
 
-  if (!response.Body) {
-    throw new Error("File not found or empty");
-  }
+      const response = (await Promise.race([
+        downloadPromise,
+        timeoutPromise,
+      ])) as any;
 
-  const chunks: Uint8Array[] = [];
-  const reader = response.Body.transformToWebStream().getReader();
+      if (!response.Body) {
+        throw new Error("File not found or empty");
+      }
 
-  const streamTimeout = setTimeout(() => {
-    reader.cancel();
-    throw new Error("Stream reading timeout");
-  }, 60 * 1000); // 1 minute for stream reading
+      const chunks: Uint8Array[] = [];
+      const reader = response.Body.transformToWebStream().getReader();
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+      const streamTimeout = setTimeout(() => {
+        reader.cancel();
+        throw new Error("Stream reading timeout");
+      }, 60 * 1000); // 1 minute for stream reading
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        clearTimeout(streamTimeout);
+      } catch (error) {
+        clearTimeout(streamTimeout);
+        throw error;
+      }
+
+      console.log(`✅ S3 download successful on attempt ${attempt}`);
+      return Buffer.concat(chunks);
+    } catch (error: any) {
+      const isRetryableError =
+        error.name === "NoSuchKey" ||
+        error.Code === "NoSuchKey" ||
+        error.name === "NotFound" ||
+        error.message?.includes("timeout");
+
+      if (attempt === maxRetries || !isRetryableError) {
+        console.error(`❌ S3 download failed after ${attempt} attempts:`, {
+          error: error.message,
+          filePath,
+          errorCode: error.Code || error.code,
+          errorName: error.name,
+          attempt,
+        });
+        throw error;
+      }
+
+      const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+      console.warn(
+        `⚠️ S3 download attempt ${attempt} failed, retrying in ${delay}ms:`,
+        {
+          error: error.message,
+          filePath,
+          errorCode: error.Code || error.code,
+          nextAttempt: attempt + 1,
+        }
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
-    clearTimeout(streamTimeout);
-  } catch (error) {
-    clearTimeout(streamTimeout);
-    throw error;
   }
 
-  return Buffer.concat(chunks);
+  throw new Error("This should never be reached");
+}
+
+export async function checkFileExists(filePath: string): Promise<boolean> {
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: filePath,
+    });
+
+    await s3Client.send(command);
+    return true;
+  } catch (error: any) {
+    if (
+      error.name === "NotFound" ||
+      error.name === "NoSuchKey" ||
+      error.Code === "NoSuchKey"
+    ) {
+      return false;
+    }
+    throw error; // Re-throw other errors
+  }
 }
 
 export async function deleteFile(filePath: string): Promise<void> {
