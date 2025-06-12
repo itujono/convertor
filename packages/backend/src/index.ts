@@ -71,12 +71,35 @@ app.use(
         ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
       ];
 
-      // Return the origin if it's allowed, null otherwise
-      if (!origin || allowedOrigins.includes(origin)) {
-        return origin || "*";
+      // Add debugging for OPTIONS requests
+      if (c.req.method === "OPTIONS") {
+        const headersObj: Record<string, string> = {};
+        c.req.raw.headers.forEach((value, key) => {
+          headersObj[key] = value;
+        });
+
+        console.log("🔍 OPTIONS preflight request:", {
+          origin,
+          allowedOrigins,
+          isOriginAllowed: origin ? allowedOrigins.includes(origin) : true,
+          frontendUrl: process.env.FRONTEND_URL,
+          path: c.req.path,
+          headers: headersObj,
+        });
       }
 
-      return null;
+      // Handle cases where origin is not provided (same-origin requests)
+      if (!origin) {
+        return "*";
+      }
+
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        return origin;
+      }
+
+      console.log("❌ CORS: Origin not allowed:", origin);
+      return null; // Return null for disallowed origins
     },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -96,14 +119,35 @@ app.get("/api/debug/cors", async (c) => {
     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
   ];
 
+  const requestOrigin = c.req.header("origin");
+
   return c.json({
     corsOrigins,
     frontendUrl: process.env.FRONTEND_URL,
     nodeEnv: process.env.NODE_ENV,
-    requestOrigin: c.req.header("origin"),
+    requestOrigin,
+    isOriginAllowed: requestOrigin ? corsOrigins.includes(requestOrigin) : true,
     railwayUrl:
       process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_DOMAIN || "not-set",
+    allEnvVars: {
+      RAILWAY_STATIC_URL: process.env.RAILWAY_STATIC_URL,
+      RAILWAY_DOMAIN: process.env.RAILWAY_DOMAIN,
+      FRONTEND_URL: process.env.FRONTEND_URL,
+      NODE_ENV: process.env.NODE_ENV,
+    },
+    requestHeaders: {
+      origin: c.req.header("origin"),
+      referer: c.req.header("referer"),
+      host: c.req.header("host"),
+      userAgent: c.req.header("user-agent"),
+    },
   });
+});
+
+// Add a simple OPTIONS test endpoint
+app.options("/api/debug/test-options", async (c) => {
+  console.log("🧪 Test OPTIONS endpoint hit");
+  return c.json({ message: "OPTIONS test successful" });
 });
 
 app.get("/api/debug/conversion-setup", async (c) => {
