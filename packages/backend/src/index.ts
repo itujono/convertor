@@ -65,6 +65,7 @@ app.use(
       const allowedOrigins = [
         "https://www.useconvertor.com",
         "https://useconvertor.com",
+        "https://convertor-staging.vercel.app",
         "http://localhost:3000",
         "http://localhost:3001",
         ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
@@ -89,6 +90,7 @@ app.get("/api/debug/cors", async (c) => {
   const corsOrigins = [
     "https://www.useconvertor.com",
     "https://useconvertor.com",
+    "https://convertor-staging.vercel.app",
     "http://localhost:3000",
     "http://localhost:3001",
     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
