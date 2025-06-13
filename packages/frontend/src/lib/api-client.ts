@@ -2,7 +2,14 @@ import { supabase } from "./auth-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-class ApiClient {
+export class ApiClient {
+  private baseUrl: string;
+  private abortController: AbortController | null = null;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
   private async getAuthHeaders(): Promise<HeadersInit> {
     const {
       data: { session },
@@ -20,10 +27,57 @@ class ApiClient {
     };
   }
 
+  cancelGetUserFiles(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
+  async getUserFiles(): Promise<UserFilesResponse> {
+    this.cancelGetUserFiles();
+
+    this.abortController = new AbortController();
+    const currentController = this.abortController;
+
+    const headers = await this.getAuthHeaders();
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/user-files`, {
+        method: "GET",
+        headers,
+        signal: currentController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (this.abortController === currentController) {
+        this.abortController = null;
+      }
+
+      return data;
+    } catch (error) {
+      if (this.abortController === currentController) {
+        this.abortController = null;
+      }
+
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("getUserFiles request was cancelled");
+        return { files: [], count: 0, cancelled: true };
+      }
+
+      throw error;
+    }
+  }
+
   private async request(endpoint: string, options: RequestInit = {}) {
     const authHeaders = await this.getAuthHeaders();
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       headers: {
         ...authHeaders,
         ...options.headers,
@@ -57,13 +111,11 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
-    // Create a combined abort controller that responds to both timeout and external abort
     const internalController = new AbortController();
     const timeoutId = setTimeout(() => {
       internalController.abort();
     }, 10 * 60 * 1000); // 10 minute timeout
 
-    // If external abort signal is provided, listen to it
     if (abortSignal) {
       abortSignal.addEventListener("abort", () => {
         internalController.abort();
@@ -71,10 +123,10 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+      const response = await fetch(`${this.baseUrl}/api/upload`, {
         method: "POST",
         headers,
-        body: formData, // Don't set Content-Type for FormData
+        body: formData,
         signal: internalController.signal,
       });
 
@@ -89,7 +141,6 @@ class ApiClient {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === "AbortError") {
-        // Check if it was aborted by external signal or timeout
         if (abortSignal?.aborted) {
           throw new Error("Upload cancelled by user");
         }
@@ -125,7 +176,7 @@ class ApiClient {
   }
 
   getDownloadUrl(filename: string) {
-    return `${API_BASE_URL}/api/download/${filename}`;
+    return `${this.baseUrl}/api/download/${filename}`;
   }
 
   async downloadFile(filename: string) {
@@ -138,7 +189,7 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/download/${filename}`, {
+    const response = await fetch(`${this.baseUrl}/api/download/${filename}`, {
       method: "GET",
       headers,
     });
@@ -174,7 +225,7 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/download/zip`, {
+    const response = await fetch(`${this.baseUrl}/api/download/zip`, {
       method: "POST",
       headers,
       body: JSON.stringify({ filePaths: fileNames }),
@@ -219,10 +270,6 @@ class ApiClient {
     return this.request("/api/health");
   }
 
-  async getUserFiles() {
-    return this.request("/api/user-files");
-  }
-
   async markFileDownloaded(fileId: string) {
     return this.request("/api/user-files/mark-downloaded", {
       method: "POST",
@@ -249,7 +296,6 @@ class ApiClient {
 
     const formData = new FormData();
 
-    // Create converted filename
     const baseName = originalFileName.split(".").slice(0, -1).join(".");
     const convertedFileName = `${baseName}_converted.${convertedFormat === "jpeg" ? "jpg" : convertedFormat}`;
 
@@ -265,7 +311,7 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/client-converted`, {
+    const response = await fetch(`${this.baseUrl}/api/client-converted`, {
       method: "POST",
       headers,
       body: formData,
@@ -280,7 +326,7 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+export const apiClient = new ApiClient(API_BASE_URL);
 
 export interface User {
   id: string;
@@ -303,8 +349,8 @@ export interface ConversionResponse {
   message: string;
   outputPath: string;
   downloadUrl: string;
-  fileName?: string; // User-friendly filename for display
-  fileSize?: number; // Size of the converted file in bytes
+  fileName?: string;
+  fileSize?: number;
 }
 
 export interface Subscription {
@@ -341,12 +387,13 @@ export interface UserFile {
   expires_at: string;
   created_at: string;
   last_downloaded_at?: string;
-  time_remaining: number; // milliseconds until expiration
+  time_remaining: number;
 }
 
 export interface UserFilesResponse {
   files: UserFile[];
   count: number;
+  cancelled?: boolean;
 }
 
 export interface UploadStatusResponse {

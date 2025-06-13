@@ -75,11 +75,11 @@ export default function AvatarDropdown() {
             <SettingsIcon size={16} className="opacity-60" aria-hidden="true" />
             <span>Preferences</span>
           </DropdownMenuItem> */}
-          <DropdownMenuItem>
+          <DropdownMenuItem disabled>
             <HelpCircleIcon size={16} className="opacity-60" aria-hidden="true" />
             <span>Help & Support</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem disabled>
             <BookOpenIcon size={16} className="opacity-60" aria-hidden="true" />
             <span>Documentation</span>
           </DropdownMenuItem>

@@ -27,23 +27,35 @@ function formatFileSize(bytes: number): string {
 interface FileListProps {
   files: FileWithPreview[];
   uploadProgress: UploadProgress[];
+  clientConversions?: Array<{
+    fileId: string;
+    progress: number;
+    completed: boolean;
+    converting: boolean;
+    result?: any;
+    error?: string;
+  }>;
   selectedFormats: Record<string, string>;
   selectedQualities: Record<string, string>;
   availableQualities: Array<{ value: string; label: string }>;
+  allQualities: Array<{ value: string; label: string }>;
   onFormatChange: (fileId: string, format: string) => void;
   onQualityChange: (fileId: string, quality: string) => void;
   onFileRemove: (fileId: string) => void;
   onOpenFileDialog: () => void;
   onClearAll: () => void;
   onAbortUpload?: (fileId: string) => void;
+  onClientFileDownload?: (fileId: string) => void;
 }
 
 export function FileList({
   files,
   uploadProgress,
+  clientConversions = [],
   selectedFormats,
   selectedQualities,
   availableQualities,
+  allQualities,
   ...handlers
 }: FileListProps) {
   return (
@@ -65,6 +77,7 @@ export function FileList({
       <div className="w-full space-y-2">
         {files.map((file) => {
           const fileProgress = uploadProgress.find((p) => p.fileId === file.id);
+          const clientConversion = clientConversions.find((c) => c.fileId === file.id);
           const selectedFormat = selectedFormats[file.id] || "";
           const selectedQuality = selectedQualities[file.id] || "medium";
 
@@ -73,13 +86,16 @@ export function FileList({
               key={file.id}
               file={file}
               fileProgress={fileProgress}
+              clientConversion={clientConversion}
               selectedFormat={selectedFormat}
               selectedQuality={selectedQuality}
               availableQualities={availableQualities}
+              allQualities={allQualities}
               onFormatChange={handlers.onFormatChange}
               onQualityChange={handlers.onQualityChange}
               onRemove={handlers.onFileRemove}
               onAbortUpload={handlers.onAbortUpload}
+              onClientFileDownload={handlers.onClientFileDownload}
             />
           );
         })}
@@ -91,30 +107,54 @@ export function FileList({
 interface FileCardProps {
   file: FileWithPreview;
   fileProgress?: UploadProgress;
+  clientConversion?: {
+    fileId: string;
+    progress: number;
+    completed: boolean;
+    converting: boolean;
+    result?: any;
+    error?: string;
+  };
   selectedFormat: string;
   selectedQuality: string;
   availableQualities: Array<{ value: string; label: string }>;
+  allQualities: Array<{ value: string; label: string }>;
   onFormatChange: (fileId: string, format: string) => void;
   onQualityChange: (fileId: string, quality: string) => void;
   onRemove: (fileId: string) => void;
   onAbortUpload?: (fileId: string) => void;
+  onClientFileDownload?: (fileId: string) => void;
 }
 
 export function FileCard({
   file,
   fileProgress,
+  clientConversion,
   selectedFormat,
   selectedQuality,
   availableQualities,
+  allQualities,
   onFormatChange,
   onQualityChange,
   onRemove,
   onAbortUpload,
+  onClientFileDownload,
 }: FileCardProps) {
+  // Server-side states
   const isUploading = fileProgress && !fileProgress.completed && !fileProgress.aborted && !fileProgress.error;
-  const isConverting = fileProgress && fileProgress.converting;
-  const isCompleted = fileProgress && fileProgress.converted;
-  const hasError = fileProgress && fileProgress.error;
+  const isServerConverting = fileProgress && fileProgress.converting;
+  const isServerCompleted = fileProgress && fileProgress.converted;
+  const hasServerError = fileProgress && fileProgress.error;
+
+  // Client-side states
+  const isClientConverting = clientConversion && clientConversion.converting;
+  const isClientCompleted = clientConversion && clientConversion.completed;
+  const hasClientError = clientConversion && clientConversion.error;
+
+  // Unified states
+  const isConverting = isServerConverting || isClientConverting;
+  const isCompleted = isServerCompleted || isClientCompleted;
+  const hasError = hasServerError || hasClientError;
   const isProcessing = isUploading || isConverting;
 
   // Check if the file is an image
@@ -148,27 +188,46 @@ export function FileCard({
           <p className="text-muted-foreground text-xs">
             {formatFileSize(fileSize)}
             {/* Show conversion result info if completed */}
-            {isCompleted && fileProgress?.convertedFileName && (
+            {isCompleted && (
               <>
                 {" → "}
-                {fileProgress.convertedFileSize && (
-                  <>
-                    {formatFileSize(fileProgress.convertedFileSize)}
-                    {(() => {
-                      const compressionRatio = Math.round(
-                        ((fileSize - fileProgress.convertedFileSize) / fileSize) * 100,
-                      );
-                      if (compressionRatio > 0) {
-                        return <span className="text-green-600 ml-1">(-{compressionRatio}%)</span>;
-                      } else if (compressionRatio < 0) {
-                        return <span className="text-orange-600 ml-1">(+{Math.abs(compressionRatio)}%)</span>;
-                      } else {
-                        return <span className="text-gray-600 ml-1">(same size)</span>;
-                      }
-                    })()}
-                    {" • "}
-                  </>
-                )}
+                {(() => {
+                  // Server-side conversion result
+                  if (isServerCompleted && fileProgress?.convertedFileSize) {
+                    const compressionRatio = Math.round(((fileSize - fileProgress.convertedFileSize) / fileSize) * 100);
+                    return (
+                      <>
+                        {formatFileSize(fileProgress.convertedFileSize)}
+                        {compressionRatio > 0 ? (
+                          <span className="text-green-600 ml-1">(-{compressionRatio}%)</span>
+                        ) : compressionRatio < 0 ? (
+                          <span className="text-orange-600 ml-1">(+{Math.abs(compressionRatio)}%)</span>
+                        ) : (
+                          <span className="text-gray-600 ml-1">(same size)</span>
+                        )}
+                        {" • "}
+                      </>
+                    );
+                  }
+                  // Client-side conversion result
+                  else if (isClientCompleted && clientConversion?.result) {
+                    const compressionRatio = clientConversion.result.compressionRatio || 0;
+                    return (
+                      <>
+                        {formatFileSize(clientConversion.result.convertedSize)}
+                        {compressionRatio > 0 ? (
+                          <span className="text-green-600 ml-1">(-{compressionRatio}%)</span>
+                        ) : compressionRatio < 0 ? (
+                          <span className="text-orange-600 ml-1">(+{Math.abs(compressionRatio)}%)</span>
+                        ) : (
+                          <span className="text-gray-600 ml-1">(same size)</span>
+                        )}
+                        {" • "}
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
                 <span className="text-green-600">Converted successfully</span>
               </>
             )}
@@ -182,12 +241,18 @@ export function FileCard({
       </div>
 
       {/* Controls */}
-      {isCompleted && fileProgress?.downloadUrl ? (
+      {isCompleted && (fileProgress?.downloadUrl || clientConversion?.result) ? (
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             size="sm"
             variant="outline"
-            onClick={() => window.open(fileProgress.downloadUrl, "_blank")}
+            onClick={() => {
+              if (isServerCompleted && fileProgress?.downloadUrl) {
+                window.open(fileProgress.downloadUrl, "_blank");
+              } else if (isClientCompleted && onClientFileDownload) {
+                onClientFileDownload(file.id);
+              }
+            }}
             className="h-8 px-3 text-xs flex-1 sm:flex-none"
           >
             <DownloadIcon className="mr-1 size-3" />
@@ -217,6 +282,7 @@ export function FileCard({
               fileId={file.id}
               selectedQuality={selectedQuality}
               availableQualities={availableQualities}
+              allQualities={allQualities}
               onQualityChange={onQualityChange}
             />
           </div>
@@ -233,13 +299,32 @@ export function FileCard({
       ) : isProcessing ? (
         <div className="flex items-center gap-2">
           <Progress
-            value={isConverting ? fileProgress?.conversionProgress || 0 : fileProgress?.progress || 0}
+            value={(() => {
+              if (isClientConverting) return clientConversion?.progress || 0;
+              if (isServerConverting) return fileProgress?.conversionProgress || 0;
+              if (isUploading) return fileProgress?.progress || 0;
+              return 0;
+            })()}
             className="w-20"
           />
           <span className="text-xs text-muted-foreground">
-            {Math.round(isConverting ? fileProgress?.conversionProgress || 0 : fileProgress?.progress || 0)}%
+            {Math.round(
+              (() => {
+                if (isClientConverting) return clientConversion?.progress || 0;
+                if (isServerConverting) return fileProgress?.conversionProgress || 0;
+                if (isUploading) return fileProgress?.progress || 0;
+                return 0;
+              })(),
+            )}
+            %
           </span>
-          {isConverting && (
+          {isClientConverting && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 border border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-purple-600">Converting...</span>
+            </div>
+          )}
+          {isServerConverting && (
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 border border-blue-500 border-t-transparent rounded-full animate-spin" />
               <span className="text-xs text-blue-600">Converting...</span>
@@ -266,7 +351,7 @@ export function FileCard({
       ) : hasError ? (
         <div className="flex items-center gap-2">
           <AlertCircleIcon className="w-4 h-4 text-red-600" />
-          <span className="text-xs text-red-600">{fileProgress?.error}</span>
+          <span className="text-xs text-red-600">{hasServerError ? fileProgress?.error : clientConversion?.error}</span>
           <Button
             size="icon"
             variant="ghost"
@@ -334,6 +419,7 @@ interface FileQualitySelectorProps {
   fileId: string;
   selectedQuality: string;
   availableQualities: Array<{ value: string; label: string }>;
+  allQualities: Array<{ value: string; label: string }>;
   onQualityChange: (fileId: string, quality: string) => void;
 }
 
@@ -341,9 +427,11 @@ export function FileQualitySelector({
   fileId,
   selectedQuality,
   availableQualities,
+  allQualities,
   onQualityChange,
 }: FileQualitySelectorProps) {
   const id = useId();
+  const availableValues = new Set(availableQualities.map((q) => q.value));
 
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
@@ -355,21 +443,44 @@ export function FileQualitySelector({
         onValueChange={(value: string) => onQualityChange(fileId, value)}
         className="flex gap-0 -space-x-px rounded-md shadow-xs w-full sm:w-auto"
       >
-        {availableQualities.map((quality) => (
-          <Tooltip key={quality.value}>
-            <TooltipTrigger asChild>
-              <label className="border-input has-data-[state=checked]:border-primary/50 has-focus-visible:border-ring has-focus-visible:ring-ring/50 relative flex h-7 min-w-10 flex-1 cursor-pointer items-center justify-center border px-1.5 text-center text-xs font-medium transition-[color,box-shadow] outline-none first:rounded-s-md last:rounded-e-md has-focus-visible:ring-[3px] has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50 has-data-[state=checked]:z-10 has-data-[state=checked]:bg-primary/5">
-                <RadioGroupItem
-                  id={`${id}-${quality.value}`}
-                  value={quality.value}
-                  className="sr-only after:absolute after:inset-0"
-                />
-                {quality.label.charAt(0).toUpperCase()}
-              </label>
-            </TooltipTrigger>
-            <TooltipContent>{quality.label}</TooltipContent>
-          </Tooltip>
-        ))}
+        {allQualities.map((quality) => {
+          const isDisabled = !availableValues.has(quality.value);
+
+          const radioButton = (
+            <label
+              key={quality.value}
+              className={`border-input has-data-[state=checked]:border-primary/50 has-focus-visible:border-ring has-focus-visible:ring-ring/50 relative flex h-7 min-w-10 flex-1 cursor-pointer items-center justify-center border px-1.5 text-center text-xs font-medium transition-[color,box-shadow] outline-none first:rounded-s-md last:rounded-e-md has-focus-visible:ring-[3px] has-data-disabled:cursor-not-allowed has-data-disabled:opacity-50 has-data-[state=checked]:z-10 has-data-[state=checked]:bg-primary/5 ${
+                isDisabled ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              <RadioGroupItem
+                id={`${id}-${quality.value}`}
+                value={quality.value}
+                disabled={isDisabled}
+                className="sr-only after:absolute after:inset-0"
+              />
+              {quality.label.charAt(0).toUpperCase()}
+            </label>
+          );
+
+          if (isDisabled) {
+            return (
+              <Tooltip key={quality.value}>
+                <TooltipTrigger asChild>{radioButton}</TooltipTrigger>
+                <TooltipContent className="bg-black text-white" arrowClassName="fill-black">
+                  <p>Only available in premium</p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+
+          return (
+            <Tooltip key={quality.value}>
+              <TooltipTrigger asChild>{radioButton}</TooltipTrigger>
+              <TooltipContent>{quality.label}</TooltipContent>
+            </Tooltip>
+          );
+        })}
       </RadioGroup>
     </div>
   );

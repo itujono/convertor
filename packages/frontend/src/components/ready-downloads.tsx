@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   DownloadIcon,
   TrashIcon,
@@ -38,12 +38,39 @@ import { useAuth } from "@/lib/auth-context";
 
 const FILES_PER_PAGE = 5;
 
+function isUrlLikelyExpired(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const expires = urlObj.searchParams.get("X-Amz-Expires");
+    const date = urlObj.searchParams.get("X-Amz-Date");
+
+    if (expires && date) {
+      const expirySeconds = parseInt(expires);
+      const urlDate = new Date(date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, "$1-$2-$3T$4:$5:$6Z"));
+      const expiryTime = urlDate.getTime() + expirySeconds * 1000;
+      const timeUntilExpiry = expiryTime - Date.now();
+
+      // Consider expired if less than 30 seconds remaining
+      return timeUntilExpiry < 30000;
+    }
+
+    // If we can't parse the expiry, assume it might be expired
+    return true;
+  } catch (e) {
+    return true;
+  }
+}
+
 function ImagePreview({ file }: { file: UserFile }) {
+  const [imageError, setImageError] = useState(false);
   const isImage = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
     file.converted_format.toLowerCase(),
   );
 
-  if (!isImage || !file.download_url) {
+  // Don't show image if URL is likely expired
+  const urlExpired = file.download_url ? isUrlLikelyExpired(file.download_url) : true;
+
+  if (!isImage || !file.download_url || imageError || urlExpired) {
     const FileIcon = getIconForFormat(file.converted_format);
     return <FileIcon className="size-4 text-muted-foreground" />;
   }
@@ -57,7 +84,8 @@ function ImagePreview({ file }: { file: UserFile }) {
           src={file.download_url}
           alt={file.original_file_name}
           className="size-full object-cover rounded"
-          unoptimized // Since these are S3 URLs, disable Next.js optimization
+          unoptimized
+          onError={() => setImageError(true)}
         />
       </DialogTrigger>
       <DialogContent className="max-w-screen-md p-0 pt-8">
@@ -71,6 +99,7 @@ function ImagePreview({ file }: { file: UserFile }) {
           alt={file.original_file_name}
           className="w-full h-auto object-contain max-h-[80vh]"
           unoptimized
+          onError={() => setImageError(true)}
         />
       </DialogContent>
     </Dialog>
@@ -147,14 +176,23 @@ export function ReadyDownloads() {
   const [error, setError] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<UserFile | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
 
   const fetchUserFiles = useCallback(async () => {
     try {
       setLoading(true);
       const response: UserFilesResponse = await apiClient.getUserFiles();
+
+      // Don't update state if request was cancelled
+      if (response.cancelled) {
+        return;
+      }
+
       setUserFiles(response.files);
       setError(null);
+      setLastRefreshTime(Date.now());
     } catch (err) {
       console.error("Failed to fetch user files:", err);
       setError("Failed to load your files");
@@ -163,34 +201,104 @@ export function ReadyDownloads() {
     }
   }, []);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    // Prevent too frequent refreshes (minimum 10 seconds between refreshes)
+    const now = Date.now();
+    if (now - lastRefreshTime < 10000) {
+      return;
+    }
+
     try {
       setRefreshing(true);
       const response: UserFilesResponse = await apiClient.getUserFiles();
+
+      // Don't update state if request was cancelled
+      if (response.cancelled) {
+        return;
+      }
+
       setUserFiles(response.files);
       setError(null);
+      setLastRefreshTime(now);
     } catch (err) {
       console.error("Failed to refresh user files:", err);
+      setError("Failed to refresh files");
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [lastRefreshTime]);
 
   useEffect(() => {
     if (user) {
       fetchUserFiles();
     }
+
+    return () => {
+      apiClient.cancelGetUserFiles();
+    };
   }, [user, fetchUserFiles]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || userFiles.length === 0) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
 
-    const interval = setInterval(() => {
+    // Check if any files have URLs that might expire soon (within 2 minutes)
+    const hasExpiringUrls = userFiles.some((file) => {
+      if (!file.download_url) return false;
+
+      // Extract expiry from presigned URL if possible
+      try {
+        const url = new URL(file.download_url);
+        const expires = url.searchParams.get("X-Amz-Expires");
+        const date = url.searchParams.get("X-Amz-Date");
+
+        if (expires && date) {
+          const expirySeconds = parseInt(expires);
+          const urlDate = new Date(date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, "$1-$2-$3T$4:$5:$6Z"));
+          const expiryTime = urlDate.getTime() + expirySeconds * 1000;
+          const timeUntilExpiry = expiryTime - Date.now();
+
+          return timeUntilExpiry < 2 * 60 * 1000;
+        }
+      } catch (e) {
+        // If we can't parse the URL, assume it might expire soon
+        return true;
+      }
+
+      return false;
+    });
+
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    const refreshInterval = hasExpiringUrls ? 60000 : 120000; // 1 minute if expiring, 2 minutes otherwise
+
+    intervalRef.current = setInterval(() => {
       handleRefresh();
-    }, 30000);
+    }, refreshInterval);
 
-    return () => clearInterval(interval);
-  }, [user]);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [user, userFiles, handleRefresh]);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      apiClient.cancelGetUserFiles();
+    };
+  }, []);
 
   const handleDownload = async (file: UserFile) => {
     if (!file.download_url) return;
@@ -263,7 +371,7 @@ export function ReadyDownloads() {
     const hoursRemaining = timeRemaining / (1000 * 60 * 60);
 
     if (hoursRemaining < 1) {
-      return { variant: "destructive" as const, text: "Expires soon!" };
+      return { variant: "destructive" as const, text: "Expires soon" };
     } else if (hoursRemaining < 6) {
       return { variant: "secondary" as const, text: "Expires today" };
     }

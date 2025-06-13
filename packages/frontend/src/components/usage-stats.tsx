@@ -1,5 +1,5 @@
 import { Progress } from "@/components/ui/progress";
-import { useUsageStats } from "@/hooks/use-app-settings";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "./ui/skeleton";
 
@@ -8,7 +8,7 @@ interface UsageStatsProps {
 }
 
 export function UsageStats({ compact = false }: UsageStatsProps) {
-  const { getRemainingConversions, getUsagePercentage, shouldShowUsageStats, user } = useUsageStats();
+  const { getRemainingConversions, getUsagePercentage, shouldShowUsageStats, user } = useAppSettings();
   const { isLoading } = useAuth();
 
   if (!shouldShowUsageStats || !user?.usage) {
@@ -49,14 +49,6 @@ export function UsageStats({ compact = false }: UsageStatsProps) {
             </span>
           </div>
           <Progress value={usage.monthly} className="h-1.5" />
-        </div>
-
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span>Storage Used</span>
-            <span>{user.usage.storageUsedGB.toFixed(1)} GB</span>
-          </div>
-          <Progress value={usage.storage} className="h-1.5" />
         </div>
       </div>
 

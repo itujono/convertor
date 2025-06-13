@@ -1,4 +1,4 @@
-import { Context } from "hono";
+import type { Context } from "hono";
 import { supabaseAdmin } from "../utils/supabase";
 import { createSignedDownloadUrl } from "../utils/aws-storage";
 import type { Variables } from "../utils/types";
@@ -26,20 +26,67 @@ export async function getUserFilesHandler(
       return c.json({ error: "Failed to fetch files" }, 500);
     }
 
-    // Regenerate signed URLs for fresh access
+    // Only regenerate signed URLs if they're missing or likely expired
     const filesWithFreshUrls = await Promise.all(
       userFiles.map(async (file) => {
         try {
-          const { signedUrl } = await createSignedDownloadUrl(
-            file.file_path,
-            300
-          ); // 5 minutes
+          let signedUrl = file.download_url;
+          let shouldRegenerateUrl = false;
 
-          // Update the download URL in database
-          await supabaseAdmin
-            .from("user_files")
-            .update({ download_url: signedUrl })
-            .eq("id", file.id);
+          // Check if we need to regenerate the URL
+          if (!signedUrl) {
+            shouldRegenerateUrl = true;
+          } else {
+            // Parse the existing URL to check expiry
+            try {
+              const url = new URL(signedUrl);
+              const expires = url.searchParams.get("X-Amz-Expires");
+              const date = url.searchParams.get("X-Amz-Date");
+
+              if (expires && date) {
+                const expirySeconds = parseInt(expires);
+                const urlDate = new Date(
+                  date.replace(
+                    /(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/,
+                    "$1-$2-$3T$4:$5:$6Z"
+                  )
+                );
+                const expiryTime = urlDate.getTime() + expirySeconds * 1000;
+                const timeUntilExpiry = expiryTime - Date.now();
+
+                // Regenerate if URL expires within 1 minute
+                if (timeUntilExpiry < 60000) {
+                  shouldRegenerateUrl = true;
+                }
+              } else {
+                // If we can't parse expiry, regenerate to be safe
+                shouldRegenerateUrl = true;
+              }
+            } catch (urlError) {
+              // If URL parsing fails, regenerate
+              shouldRegenerateUrl = true;
+            }
+          }
+
+          // Only regenerate if necessary
+          if (shouldRegenerateUrl) {
+            console.log(
+              `🔄 Regenerating signed URL for file ${file.id} (${file.original_file_name})`
+            );
+
+            const { signedUrl: newSignedUrl } = await createSignedDownloadUrl(
+              file.file_path,
+              600 // 10 minutes instead of 5 for less frequent regeneration
+            );
+
+            // Update the download URL in database
+            await supabaseAdmin
+              .from("user_files")
+              .update({ download_url: newSignedUrl })
+              .eq("id", file.id);
+
+            signedUrl = newSignedUrl;
+          }
 
           return {
             ...file,
@@ -51,12 +98,12 @@ export async function getUserFilesHandler(
           };
         } catch (error) {
           console.error(
-            `Error generating signed URL for file ${file.id}:`,
+            `Error processing signed URL for file ${file.id}:`,
             error
           );
           return {
             ...file,
-            download_url: null,
+            download_url: file.download_url, // Keep existing URL if regeneration fails
             time_remaining: Math.max(
               0,
               new Date(file.expires_at).getTime() - Date.now()

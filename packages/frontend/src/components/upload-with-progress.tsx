@@ -11,8 +11,8 @@ import { PlanBadge } from "@/components/plan-badge";
 import { GlobalQualitySelector } from "@/components/global-quality-selector";
 import { FileList } from "@/components/file-list";
 import { PricingModal } from "@/components/pricing-modal";
-import { ClientImageConverter } from "@/components/client-image-converter";
-import { canConvertClientSide, isImageFile } from "@/hooks/use-client-image-converter";
+import { UsageStats } from "@/components/usage-stats";
+import { canConvertClientSide, isImageFile, useClientImageConverter } from "@/hooks/use-client-image-converter";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -52,6 +52,17 @@ export default function UploadWithProgress() {
   const formatSelection = useFormatSelection();
   const qualitySelection = useQualitySelection();
 
+  // Client-side conversion hook for unified handling
+  const {
+    convertFiles: convertClientSide,
+    clearConversions,
+    conversions: clientConversions,
+    areAllConversionsComplete: areAllClientConversionsComplete,
+    hasActiveConversions: hasActiveClientConversions,
+    hasCompletedConversions: hasCompletedClientConversions,
+    downloadFile: downloadClientFile,
+  } = useClientImageConverter();
+
   const [{ files, isDragging, errors }, fileUploadActions] = useFileUpload({
     multiple: true,
     maxFiles: planLimits.maxFiles,
@@ -72,48 +83,156 @@ export default function UploadWithProgress() {
 
   const handleClearAll = async () => {
     await clearProgress();
+    clearConversions(); // Clear client-side conversions
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();
   };
 
-  const handleStartConversion = () => {
-    handleFilesAdded(files, formatSelection.selectedFormats, qualitySelection.selectedQualities);
+  const handleStartConversion = async () => {
+    // Separate files into client-side and server-side processing
+    const clientSideFiles = files.filter((file) => {
+      if (!isImageFile(file)) return false;
+      const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
+      return canConvertClientSide(file, targetFormat);
+    });
+
+    const serverSideFiles = files.filter((file) => {
+      if (isImageFile(file)) {
+        const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
+        return !canConvertClientSide(file, targetFormat);
+      }
+      return true; // All non-image files go to server-side
+    });
+
+    // Start client-side conversions immediately (no upload needed)
+    if (clientSideFiles.length > 0) {
+      await convertClientSide(clientSideFiles, formatSelection.selectedFormats, qualitySelection.selectedQualities);
+    }
+
+    // Start server-side conversions (upload + convert)
+    if (serverSideFiles.length > 0) {
+      handleFilesAdded(serverSideFiles, formatSelection.selectedFormats, qualitySelection.selectedQualities);
+    }
+  };
+
+  // Unified completion checker that considers both client-side and server-side conversions
+  const areAllUnifiedConversionsComplete = () => {
+    // Get all file IDs that should have conversions
+    const allFileIds = files.map((f) => f.id);
+
+    if (allFileIds.length === 0) return false;
+
+    // Check each file to see if it's converted either client-side or server-side
+    const allConverted = allFileIds.every((fileId) => {
+      // Check if it's converted client-side
+      const clientConversion = clientConversions.find((c) => c.fileId === fileId);
+      if (clientConversion && (clientConversion.completed || clientConversion.error)) {
+        return true;
+      }
+
+      // Check if it's converted server-side
+      const serverConversion = uploadProgress.find((p) => p.fileId === fileId);
+      if (serverConversion && (serverConversion.converted || serverConversion.error)) {
+        return true;
+      }
+
+      return false;
+    });
+
+    return allConverted;
+  };
+
+  // Unified active operations checker
+  const hasUnifiedActiveOperations = () => {
+    // Check client-side active conversions
+    if (hasActiveClientConversions) return true;
+
+    // Check server-side active operations
+    if (hasActiveOperations()) return true;
+
+    return false;
   };
 
   // Check if there are files ready to be converted (either uploaded and ready, or not yet started)
   const hasFilesToConvert = () => {
-    // Files that haven't been uploaded yet (no progress entry)
-    const filesNotStarted = files.filter((file) => !uploadProgress.find((p) => p.fileId === file.id));
+    // Get files that haven't been processed by either client-side or server-side
+    const unprocessedFiles = files.filter((file) => {
+      // Check if already processed client-side
+      const clientConversion = clientConversions.find((c) => c.fileId === file.id);
+      if (clientConversion && (clientConversion.completed || clientConversion.converting)) {
+        return false;
+      }
 
-    // Files that are uploaded but not converted/failed
+      // Check if already processed server-side
+      const serverProgress = uploadProgress.find((p) => p.fileId === file.id);
+      if (serverProgress && (serverProgress.converted || serverProgress.converting || !serverProgress.error)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Also include files that are uploaded but not converted/failed
     const filesReadyToConvert = uploadProgress.filter((p) => !p.converted && !p.error && !p.aborted && p.completed);
 
-    return filesNotStarted.length > 0 || filesReadyToConvert.length > 0;
+    return unprocessedFiles.length > 0 || filesReadyToConvert.length > 0;
+  };
+
+  // Get all converted file paths (both client-side and server-side)
+  const getAllConvertedFilePaths = () => {
+    const serverSidePaths = getConvertedFilePaths();
+    // Note: Client-side conversions don't have server paths, they're downloaded directly
+    // So we only return server-side paths for zip download
+    return serverSidePaths;
   };
 
   const handleDownloadAllAsZip = async () => {
     try {
       setIsDownloadingZip(true);
-      const convertedFilePaths = getConvertedFilePaths();
 
-      if (convertedFilePaths.length === 0) {
+      // Handle client-side downloads first (individual downloads)
+      const clientSideConversions = clientConversions.filter((c) => c.completed && c.result);
+      if (clientSideConversions.length > 0) {
+        // Download client-side files individually since they can't be zipped server-side
+        for (const conversion of clientSideConversions) {
+          if (conversion.result) {
+            const { downloadUrl, fileName } = conversion.result;
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay between downloads
+          }
+        }
+      }
+
+      // Handle server-side zip download
+      const convertedFilePaths = getConvertedFilePaths();
+      if (convertedFilePaths.length > 0) {
+        console.log("Downloading zip with paths:", convertedFilePaths);
+        await apiClient.downloadZip(convertedFilePaths);
+      }
+
+      const totalFiles = clientSideConversions.length + convertedFilePaths.length;
+      if (totalFiles === 0) {
         toast.error("No files to download", {
           description: "No converted files are available for download.",
         });
         return;
       }
 
-      console.log("Downloading zip with paths:", convertedFilePaths);
-      await apiClient.downloadZip(convertedFilePaths);
-
       toast.success("Download started", {
-        description: `Downloading ${convertedFilePaths.length} file${convertedFilePaths.length > 1 ? "s" : ""} as ZIP`,
+        description: `Downloading ${totalFiles} file${totalFiles > 1 ? "s" : ""}${
+          convertedFilePaths.length > 0 ? " (some as ZIP)" : ""
+        }`,
       });
     } catch (error) {
-      console.error("Failed to download zip:", error);
+      console.error("Failed to download files:", error);
       toast.error("Download failed", {
-        description: error instanceof Error ? error.message : "Failed to prepare zip file",
+        description: error instanceof Error ? error.message : "Failed to prepare files",
       });
     } finally {
       setIsDownloadingZip(false);
@@ -122,6 +241,7 @@ export default function UploadWithProgress() {
 
   const handleAbortAll = async () => {
     await clearProgress();
+    clearConversions(); // Clear client-side conversions
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();
@@ -134,197 +254,164 @@ export default function UploadWithProgress() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <PlanBadge
-            showUpgradeButton={shouldShowUpgrade}
-            onUpgradeClick={() => {}}
-            UpgradeComponent={shouldShowUpgrade ? UpgradeButton : undefined}
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Main Upload Area */}
+      <div className="flex-1 flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <PlanBadge
+              showUpgradeButton={shouldShowUpgrade}
+              onUpgradeClick={() => {}}
+              UpgradeComponent={shouldShowUpgrade ? UpgradeButton : undefined}
+            />
+          </div>
+          <GlobalQualitySelector
+            globalQuality={qualitySelection.globalQuality}
+            availableQualities={qualitySelection.getAvailableQualities()}
+            allQualities={qualitySelection.getAllQualities()}
+            onGlobalQualityChange={qualitySelection.handleGlobalQualityChange}
           />
         </div>
-        <GlobalQualitySelector
-          globalQuality={qualitySelection.globalQuality}
-          availableQualities={qualitySelection.getAvailableQualities()}
-          allQualities={qualitySelection.getAllQualities()}
-          onGlobalQualityChange={qualitySelection.handleGlobalQualityChange}
-        />
-      </div>
 
-      <div className="flex flex-col gap-4">
-        {/* Offline indicator */}
-        {!isOnline && (
-          <div className="flex items-center justify-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <Badge variant="destructive" className="text-xs">
-              📡 Offline
-            </Badge>
-            <span className="text-sm text-destructive">
-              No internet connection. Uploads and conversions are paused.
-            </span>
-          </div>
-        )}
+        <div className="flex flex-col gap-4">
+          {/* Offline indicator */}
+          {!isOnline && (
+            <div className="flex items-center justify-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <Badge variant="destructive" className="text-xs">
+                📡 Offline
+              </Badge>
+              <span className="text-sm text-destructive">
+                No internet connection. Uploads and conversions are paused.
+              </span>
+            </div>
+          )}
 
-        {/* Show upload box when there are no active operations */}
-        {!hasActiveOperations() && (
-          <div
-            role="button"
-            onClick={fileUploadActions.openFileDialog}
-            onDragEnter={fileUploadActions.handleDragEnter}
-            onDragLeave={fileUploadActions.handleDragLeave}
-            onDragOver={fileUploadActions.handleDragOver}
-            onDrop={fileUploadActions.handleDrop}
-            data-dragging={isDragging || undefined}
-            className={cn(
-              "flex min-h-32 sm:min-h-40 flex-col items-center justify-center rounded-xl p-4 bg-background/20",
-              "border-2 border-dashed border-background",
-              "py-12 sm:py-16",
-              "cursor-pointer transition-colors",
-              "hover:bg-background/70 data-[dragging=true]:bg-background/70",
-              "has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 has-[input:focus]:ring-[3px]",
-              "has-disabled:pointer-events-none has-disabled:opacity-50",
-            )}
-          >
-            <input {...fileUploadActions.getInputProps()} className="sr-only" aria-label="Upload files" />
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex size-8 sm:size-10 items-center justify-center rounded-full border-2 border-background">
-                <FileUpIcon className="size-3 sm:size-4" aria-hidden="true" />
-              </div>
-              <div className="text-center px-4">
-                <p className="text-sm font-medium">
-                  {hasAnyCompletedFiles() ? "Add more files to convert" : "Choose files or drag and drop"}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Up to {planLimits.maxFiles} files, {formatBytes(planLimits.maxFileSizeBytes)} each
-                </p>
+          {/* Show upload box when there are no active operations */}
+          {!hasUnifiedActiveOperations() && (
+            <div
+              role="button"
+              onClick={fileUploadActions.openFileDialog}
+              onDragEnter={fileUploadActions.handleDragEnter}
+              onDragLeave={fileUploadActions.handleDragLeave}
+              onDragOver={fileUploadActions.handleDragOver}
+              onDrop={fileUploadActions.handleDrop}
+              data-dragging={isDragging || undefined}
+              className={cn(
+                "flex min-h-32 sm:min-h-40 flex-col items-center justify-center rounded-xl p-4 bg-background/20",
+                "border-2 border-dashed border-background",
+                "py-12 sm:py-16",
+                "cursor-pointer transition-colors",
+                "hover:bg-background/70 data-[dragging=true]:bg-background/70",
+                "has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 has-[input:focus]:ring-[3px]",
+                "has-disabled:pointer-events-none has-disabled:opacity-50",
+              )}
+            >
+              <input {...fileUploadActions.getInputProps()} className="sr-only" aria-label="Upload files" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex size-8 sm:size-10 items-center justify-center rounded-full border-2 border-background">
+                  <FileUpIcon className="size-3 sm:size-4" aria-hidden="true" />
+                </div>
+                <div className="text-center px-4">
+                  <p className="text-sm font-medium">
+                    {hasAnyCompletedFiles() ? "Add more files to convert" : "Choose files or drag and drop"}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Up to {planLimits.maxFiles} files, {formatBytes(planLimits.maxFileSizeBytes)} each
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {errors.length > 0 && (
-          <div className="space-y-1">
-            {errors.map((error, index) => (
-              <div key={index} className="flex items-center gap-2 text-red-600">
-                <AlertCircleIcon className="size-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            ))}
-          </div>
-        )}
+          {errors.length > 0 && (
+            <div className="space-y-1">
+              {errors.map((error, index) => (
+                <div key={index} className="flex items-center gap-2 text-red-600">
+                  <AlertCircleIcon className="size-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-        {files.length > 0 && (
-          <>
-            {/* Check if we have image files that can be converted client-side */}
-            {(() => {
-              const imageFiles = files.filter((file) => {
-                if (!isImageFile(file)) return false;
-                const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
-                return canConvertClientSide(file, targetFormat);
-              });
+          {files.length > 0 && (
+            <>
+              {/* Unified File List - handles both client-side and server-side processing */}
+              <FileList
+                files={files}
+                uploadProgress={uploadProgress}
+                clientConversions={clientConversions}
+                selectedFormats={formatSelection.selectedFormats}
+                selectedQualities={qualitySelection.selectedQualities}
+                availableQualities={qualitySelection.getAvailableQualities()}
+                allQualities={qualitySelection.getAllQualities()}
+                onFormatChange={formatSelection.handleFormatChange}
+                onQualityChange={qualitySelection.handleQualityChange}
+                onFileRemove={handleFileRemove}
+                onOpenFileDialog={fileUploadActions.openFileDialog}
+                onClearAll={handleClearAll}
+                onAbortUpload={abortUpload}
+                onClientFileDownload={downloadClientFile}
+              />
 
-              if (imageFiles.length > 0) {
-                return (
-                  <ClientImageConverter
-                    files={files}
-                    selectedFormats={formatSelection.selectedFormats}
-                    selectedQualities={qualitySelection.selectedQualities}
-                    onFormatChange={formatSelection.handleFormatChange}
-                    onQualityChange={qualitySelection.handleQualityChange}
-                    onFileRemove={handleFileRemove}
-                    onClearAll={handleClearAll}
-                    onOpenFileDialog={fileUploadActions.openFileDialog}
-                  />
-                );
-              }
-
-              // Fallback to regular server-side processing
-              return (
-                <FileList
-                  files={files}
-                  uploadProgress={uploadProgress}
-                  selectedFormats={formatSelection.selectedFormats}
-                  selectedQualities={qualitySelection.selectedQualities}
-                  availableQualities={qualitySelection.getAvailableQualities()}
-                  onFormatChange={formatSelection.handleFormatChange}
-                  onQualityChange={qualitySelection.handleQualityChange}
-                  onFileRemove={handleFileRemove}
-                  onOpenFileDialog={fileUploadActions.openFileDialog}
-                  onClearAll={handleClearAll}
-                  onAbortUpload={abortUpload}
-                />
-              );
-            })()}
-
-            {/* Only show action buttons for server-side conversion */}
-            {(() => {
-              const imageFiles = files.filter((file) => {
-                if (!isImageFile(file)) return false;
-                const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
-                return canConvertClientSide(file, targetFormat);
-              });
-
-              // If all files are client-side processable, don't show server-side buttons
-              if (imageFiles.length === files.length) {
-                return null;
-              }
-
-              return (
-                <div className="flex flex-col items-center mt-6 gap-2">
-                  {areAllConversionsComplete() ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <Button
-                        onClick={handleDownloadAllAsZip}
-                        size="lg"
-                        className="w-full sm:w-auto px-8"
-                        disabled={isDownloadingZip}
-                      >
-                        <DownloadIcon className="w-4 h-4 mr-2" />
-                        {isDownloadingZip ? "Preparing zip..." : "Download all as zip"}
-                      </Button>
-                      <Button
-                        onClick={() => handleClearAll()}
-                        variant="link"
-                        size="sm"
-                        className="w-full sm:w-auto px-6 mt-2"
-                      >
-                        Upload more files
-                      </Button>
-                    </div>
-                  ) : hasActiveOperations() ? (
-                    <>
-                      <Button size="lg" className="w-full sm:w-auto px-8" disabled>
-                        Processing...
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="link" className="text-destructive">
-                            Abort all...
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-                            <div
-                              className="flex size-9 shrink-0 items-center justify-center rounded-full border"
-                              aria-hidden="true"
-                            >
-                              <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
-                            </div>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to abort all operations? This will cancel all uploads and
-                                conversions in progress.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
+              {/* Unified Action Buttons */}
+              <div className="flex flex-col items-center mt-6 gap-2">
+                {areAllUnifiedConversionsComplete() ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Button
+                      onClick={handleDownloadAllAsZip}
+                      size="lg"
+                      className="w-full sm:w-auto px-8"
+                      disabled={isDownloadingZip}
+                    >
+                      <DownloadIcon className="w-4 h-4 mr-2" />
+                      {isDownloadingZip ? "Preparing zip..." : "Download all converted files"}
+                    </Button>
+                    <Button
+                      onClick={() => handleClearAll()}
+                      variant="link"
+                      size="sm"
+                      className="w-full sm:w-auto px-6 mt-2"
+                    >
+                      Upload more files
+                    </Button>
+                  </div>
+                ) : hasUnifiedActiveOperations() ? (
+                  <>
+                    <Button size="lg" className="w-full sm:w-auto px-8" disabled>
+                      Processing...
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="link" className="text-destructive">
+                          Abort all...
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
+                          <div
+                            className="flex size-9 shrink-0 items-center justify-center rounded-full border"
+                            aria-hidden="true"
+                          >
+                            <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
                           </div>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleAbortAll}>Confirm</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  ) : hasFilesToConvert() ? (
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to abort all operations? This will cancel all uploads and
+                              conversions in progress.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                        </div>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleAbortAll}>Confirm</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                ) : hasFilesToConvert() ? (
+                  <div className="flex flex-col items-center gap-2">
                     <Button
                       onClick={handleStartConversion}
                       size="lg"
@@ -335,41 +422,71 @@ export default function UploadWithProgress() {
                         "Offline - Cannot Convert"
                       ) : (
                         <>
-                          Start converting now{" "}
+                          Convert All Files{" "}
                           <span role="img" aria-label="Lightning">
                             ⚡️
                           </span>
                         </>
                       )}
                     </Button>
-                  ) : hasAnyCompletedFiles() ? (
-                    <div className="flex flex-col items-center gap-2">
-                      {getConvertedFilePaths().length > 0 && (
-                        <Button
-                          onClick={handleDownloadAllAsZip}
-                          size="lg"
-                          className="w-full sm:w-auto px-8"
-                          disabled={isDownloadingZip}
-                        >
-                          <DownloadIcon className="w-4 h-4 mr-2" />
-                          {isDownloadingZip ? "Preparing zip..." : "Download converted files"}
-                        </Button>
-                      )}
+                    {(() => {
+                      const clientSideCount = files.filter((file) => {
+                        if (!isImageFile(file)) return false;
+                        const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
+                        return canConvertClientSide(file, targetFormat);
+                      }).length;
+
+                      const serverSideCount = files.length - clientSideCount;
+
+                      if (clientSideCount > 0 && serverSideCount > 0) {
+                        return (
+                          <p className="text-xs text-muted-foreground text-center">
+                            {clientSideCount} image{clientSideCount !== 1 ? "s" : ""} convert instantly •{" "}
+                            {serverSideCount} file{serverSideCount !== 1 ? "s" : ""} upload to server
+                          </p>
+                        );
+                      } else if (clientSideCount > 0) {
+                        return (
+                          <p className="text-xs text-muted-foreground text-center">
+                            All files convert instantly in your browser
+                          </p>
+                        );
+                      } else {
+                        return (
+                          <p className="text-xs text-muted-foreground text-center">
+                            Files will be uploaded and processed on our servers
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                ) : hasAnyCompletedFiles() || hasCompletedClientConversions ? (
+                  <div className="flex flex-col items-center gap-2">
+                    {(getConvertedFilePaths().length > 0 || clientConversions.some((c) => c.completed && c.result)) && (
                       <Button
-                        onClick={() => handleClearAll()}
-                        variant="outline"
-                        size="sm"
-                        className="w-full sm:w-auto px-6 mt-2"
+                        onClick={handleDownloadAllAsZip}
+                        size="lg"
+                        className="w-full sm:w-auto px-8"
+                        disabled={isDownloadingZip}
                       >
-                        Upload more files
+                        <DownloadIcon className="w-4 h-4 mr-2" />
+                        {isDownloadingZip ? "Preparing zip..." : "Download converted files"}
                       </Button>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })()}
-          </>
-        )}
+                    )}
+                    <Button
+                      onClick={() => handleClearAll()}
+                      variant="outline"
+                      size="sm"
+                      className="w-full sm:w-auto px-6 mt-2"
+                    >
+                      Upload more files
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

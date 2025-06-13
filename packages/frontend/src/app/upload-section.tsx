@@ -6,6 +6,8 @@ import UploadWithProgress from "@/components/upload-with-progress";
 import { ReadyDownloads } from "@/components/ready-downloads";
 import { useAuth } from "@/lib/auth-context";
 import { AppSettings } from "@/lib/app-settings";
+import { UsageStats } from "@/components/usage-stats";
+import { PricingModal } from "@/components/pricing-modal";
 
 export default function UploadSection() {
   const { session, isLoading, signInWithGoogle, user } = useAuth();
@@ -31,13 +33,21 @@ export default function UploadSection() {
           <UnauthedSection signInWithGoogle={signInWithGoogle} />
         )}
 
+        <div className="flex-1 flex flex-col gap-4">
+          <UsageStats />
+        </div>
+
         <div className="mt-6 sm:mt-8 text-center">
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-4 sm:px-0">
             Your files are processed securely.
             <br className="hidden sm:block" />
             {user?.plan === "free" && (
               <span className="block sm:inline mt-1 sm:mt-0">
-                Free for files up to {AppSettings.plans.free.maxFileSizeMB}MB
+                Free for files up to {AppSettings.plans.free.maxFileSizeMB}MB.{" "}
+                <PricingModal>
+                  <button className="text-sm hover:text-primary/80 hover:underline text-primary">Upgrade</button>
+                </PricingModal>{" "}
+                to get more.
               </span>
             )}
           </p>
