@@ -8,28 +8,35 @@ import Link from "next/link";
 export default function Hero() {
   return (
     <>
-      <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+      <section className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center" aria-labelledby="hero-heading">
         {/* Left Content */}
         <div className="space-y-6">
-          <div className="space-y-4">
-            <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-slate-900 dark:text-white font-title">
+          <header className="space-y-4">
+            <h1
+              id="hero-heading"
+              className="text-4xl md:text-5xl lg:text-5xl font-bold text-slate-900 dark:text-white font-title"
+            >
               Convert any files
               <br />
               in seconds
               <br />
               for free.
             </h1>
-          </div>
+            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-lg">
+              Transform your images, videos, audio files, and documents instantly. Support for 50+ formats with
+              privacy-first approach. No credit card required.
+            </p>
+          </header>
 
-          <Link href="#upload">
+          <Link href="#upload" aria-label="Start converting files">
             <Button size="lg" className="px-8 py-3 rounded-full">
-              Start Converting <ArrowDownIcon className="w-4 h-4" />
+              Start Converting <ArrowDownIcon className="w-4 h-4" aria-hidden="true" />
             </Button>
           </Link>
 
           {/* Customer Stats */}
-          <div className="flex items-center gap-4 pt-10">
-            <div className="flex -space-x-2">
+          <div className="flex items-center gap-4 pt-10" role="region" aria-label="Customer testimonials">
+            <div className="flex -space-x-2" role="img" aria-label="Customer avatars">
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
                 A
               </div>
@@ -48,8 +55,8 @@ export default function Hero() {
               <div className="text-sm text-slate-600 dark:text-slate-400">
                 Happy Customers{" "}
                 <Tooltip>
-                  <TooltipTrigger className="top-0.5 left-1 relative">
-                    <InfoIcon className="w-4 h-4" />
+                  <TooltipTrigger className="top-0.5 left-1 relative" aria-label="More information">
+                    <InfoIcon className="w-4 h-4" aria-hidden="true" />
                   </TooltipTrigger>
                   <TooltipContent className="bg-black text-white" arrowClassName="fill-black">
                     Joke! We&apos;ve just launched yesterday 😅
@@ -60,27 +67,27 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* Right Content - Product Cards */}
-        <div className="space-y-4">
-          <div className="relative bg-[#488a60] rounded-2xl p-6 text-white overflow-hidden">
+        {/* Right Content - Feature Cards */}
+        <aside className="space-y-4" aria-label="Key features">
+          <article className="relative bg-[#488a60] rounded-2xl p-6 text-white overflow-hidden">
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-4">
-                <HeartIcon className="w-6 h-6" />
+                <HeartIcon className="w-6 h-6" aria-hidden="true" />
                 <Button variant="secondary" size="sm" className="bg-white/20 hover:bg-white/30 text-white border-0">
                   Try Now
                 </Button>
               </div>
               <h3 className="text-lg font-semibold mb-2">All media formats</h3>
-              <p className="text-sm opacity-90">Images, videos, and audio</p>
+              <p className="text-sm opacity-90">Images, videos, and audio files supported</p>
             </div>
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full"></div>
-          </div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full" aria-hidden="true"></div>
+          </article>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="relative bg-[#abc4e4] rounded-2xl p-4 text-white overflow-hidden">
+            <article className="relative bg-[#abc4e4] rounded-2xl p-4 text-white overflow-hidden">
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
-                  <HeartIcon className="w-5 h-5" />
+                  <HeartIcon className="w-5 h-5" aria-hidden="true" />
                   <Button
                     variant="secondary"
                     size="sm"
@@ -90,15 +97,15 @@ export default function Hero() {
                   </Button>
                 </div>
                 <h3 className="text-sm font-semibold mb-1">Lightning fast</h3>
-                <p className="text-xs opacity-90">Convert in seconds</p>
+                <p className="text-xs opacity-90">Convert files in seconds</p>
               </div>
-              <div className="absolute -right-2 -bottom-2 w-16 h-16 bg-white/10 rounded-full"></div>
-            </div>
+              <div className="absolute -right-2 -bottom-2 w-16 h-16 bg-white/10 rounded-full" aria-hidden="true"></div>
+            </article>
 
-            <div className="relative bg-[#fbb73e] rounded-2xl p-4 text-white overflow-hidden">
+            <article className="relative bg-[#fbb73e] rounded-2xl p-4 text-white overflow-hidden">
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-3">
-                  <HeartIcon className="w-5 h-5" />
+                  <HeartIcon className="w-5 h-5" aria-hidden="true" />
                   <Button
                     variant="secondary"
                     size="sm"
@@ -110,59 +117,81 @@ export default function Hero() {
                 <h3 className="text-sm font-semibold mb-1">Privacy first</h3>
                 <p className="text-xs opacity-90">We track nothing, ever.</p>
               </div>
-              <div className="absolute -right-2 -bottom-2 w-16 h-16 bg-white/10 rounded-full"></div>
-            </div>
+              <div className="absolute -right-2 -bottom-2 w-16 h-16 bg-white/10 rounded-full" aria-hidden="true"></div>
+            </article>
           </div>
-        </div>
-      </div>
+        </aside>
+      </section>
+
+      {/* <SupportedFormats /> */}
     </>
   );
 }
 
 function SupportedFormats() {
   return (
-    <div className="mb-12 sm:mb-16">
-      <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-6 sm:mb-8">
-        Supported Formats
-      </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-5xl mx-auto">
-        <div className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-          <div className="h-6 w-6 sm:h-8 sm:w-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3">
+    <section className="mb-12 sm:mb-16" aria-labelledby="supported-formats-heading">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 max-w-5xl mx-auto" role="list">
+        <article
+          className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          role="listitem"
+        >
+          <div
+            className="h-6 w-6 sm:h-8 sm:w-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3"
+            aria-hidden="true"
+          >
             <span className="text-blue-600 font-bold text-sm">IMG</span>
           </div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">Images</h3>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             JPG, PNG, GIF, WebP, SVG, BMP, TIFF
           </p>
-        </div>
-        <div className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-          <div className="h-6 w-6 sm:h-8 sm:w-8 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3">
+        </article>
+
+        <article
+          className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          role="listitem"
+        >
+          <div
+            className="h-6 w-6 sm:h-8 sm:w-8 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3"
+            aria-hidden="true"
+          >
             <span className="text-red-600 font-bold text-sm">VID</span>
           </div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">Videos</h3>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             MP4, AVI, MOV, MKV, WebM, FLV
           </p>
-        </div>
-        <div className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-          <div className="h-6 w-6 sm:h-8 sm:w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3">
+        </article>
+
+        <article
+          className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          role="listitem"
+        >
+          <div
+            className="h-6 w-6 sm:h-8 sm:w-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3"
+            aria-hidden="true"
+          >
             <span className="text-green-600 font-bold text-sm">AUD</span>
           </div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">Audio</h3>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             MP3, WAV, FLAC, AAC, OGG, M4A
           </p>
-        </div>
-        <div className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-          <div className="h-6 w-6 sm:h-8 sm:w-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3">
+        </article>
+
+        <article
+          className="text-center p-4 sm:p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+          role="listitem"
+        >
+          <div
+            className="h-6 w-6 sm:h-8 sm:w-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-3"
+            aria-hidden="true"
+          >
             <span className="text-purple-600 font-bold text-sm">DOC</span>
           </div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">Documents</h3>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-            PDF, DOC, DOCX, XLS, XLSX, PPT
+            PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX <br /> (coming soon)
           </p>
-        </div>
+        </article>
       </div>
-    </div>
+    </section>
   );
 }

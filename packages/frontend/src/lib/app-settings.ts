@@ -32,6 +32,7 @@ export interface AppSettings {
   author: {
     name: string;
     url: string;
+    email: string;
   };
   supportedFileTypes: {
     images: string[];
@@ -61,6 +62,7 @@ export const AppSettings: AppSettings = {
   author: {
     name: "Riva",
     url: "https://x.com/rvywr",
+    email: "hi@useconvertor.com",
   },
   plans: {
     free: {

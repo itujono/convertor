@@ -1,7 +1,9 @@
 "use client";
 
+import { AppSettings } from "@/lib/app-settings";
 import { useAuth } from "@/lib/auth-context";
 import { ZapIcon } from "lucide-react";
+import Link from "next/link";
 
 export default function Navbar() {
   const { user } = useAuth();
@@ -14,7 +16,9 @@ export default function Navbar() {
             {/* <div className="bg-gradient-to-r from-teal-600 to-purple-600 p-2 rounded-lg">
               <ZapIcon className="h-6 w-6 text-white" />
             </div> */}
-            <span className="text-xl font-black text-slate-900 dark:text-white font-title lowercase">Convertor</span>
+            <span className="text-xl font-black text-slate-900 hover:text-primary transition-colors dark:text-white font-title lowercase">
+              <Link href="/">{AppSettings.name}</Link>
+            </span>
           </div>
 
           <div className="flex items-center space-x-4">
