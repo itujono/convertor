@@ -13,6 +13,8 @@ import {
   FileIcon,
   TriangleAlert,
   CircleAlertIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient, type UserFile, type UserFilesResponse } from "@/lib/api-client";
 import { formatBytes } from "@/hooks/use-file-upload";
 import { useAuth } from "@/lib/auth-context";
+
+const FILES_PER_PAGE = 5;
 
 function ImagePreview({ file }: { file: UserFile }) {
   const isImage = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
@@ -142,6 +146,7 @@ export function ReadyDownloads() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<UserFile | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const { user } = useAuth();
 
   const fetchUserFiles = useCallback(async () => {
@@ -221,6 +226,12 @@ export function ReadyDownloads() {
       await apiClient.deleteUserFile(fileToDelete.id);
       setFileToDelete(null);
       fetchUserFiles();
+
+      // Reset to page 1 if current page becomes empty after deletion
+      const totalPages = Math.ceil((userFiles.length - 1) / FILES_PER_PAGE);
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(totalPages);
+      }
     } catch (err) {
       console.error("Failed to delete file:", err);
     }
@@ -257,6 +268,24 @@ export function ReadyDownloads() {
       return { variant: "secondary" as const, text: "Expires today" };
     }
     return { variant: "outline" as const, text: "Available" };
+  };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(userFiles.length / FILES_PER_PAGE);
+  const startIndex = (currentPage - 1) * FILES_PER_PAGE;
+  const endIndex = startIndex + FILES_PER_PAGE;
+  const currentFiles = userFiles.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePrevPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
   };
 
   if (!user) return null;
@@ -363,7 +392,7 @@ export function ReadyDownloads() {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {userFiles.map((file) => {
+          {currentFiles.map((file) => {
             const expirationStatus = getExpirationStatus(file.time_remaining);
 
             return (
@@ -422,27 +451,65 @@ export function ReadyDownloads() {
             );
           })}
         </div>
-        <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && setFileToDelete(null)}>
-          <AlertDialogContent>
-            <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full border" aria-hidden="true">
-                <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
-              </div>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete file?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  You haven&apos;t downloaded this file yet. Are you sure you want to delete{" "}
-                  <strong>{fileToDelete?.original_file_name}</strong>? You won&apos;t be able to download it again.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-12">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrevPage}
+              disabled={currentPage === 1}
+              className="h-8 w-8 p-0 border-transparent shadow-none"
+            >
+              <ChevronLeftIcon className="size-4" />
+            </Button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageChange(page)}
+                  className="h-8 w-8 p-0"
+                >
+                  {page}
+                </Button>
+              ))}
             </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setFileToDelete(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDelete}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="h-8 w-8 p-0 border-transparent shadow-none"
+            >
+              <ChevronRightIcon className="size-4" />
+            </Button>
+          </div>
+        )}
       </CardContent>
+      <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && setFileToDelete(null)}>
+        <AlertDialogContent>
+          <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full border" aria-hidden="true">
+              <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
+            </div>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete file?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You haven&apos;t downloaded this file yet. Are you sure you want to delete{" "}
+                <strong>{fileToDelete?.original_file_name}</strong>? You won&apos;t be able to download it again.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setFileToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

@@ -6,6 +6,7 @@ import { useUploadProgress } from "@/hooks/use-upload-progress";
 import { useFormatSelection } from "@/hooks/use-format-selection";
 import { useQualitySelection } from "@/hooks/use-quality-selection";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { useOnlineDetector } from "@/hooks/use-online-detector";
 import { PlanBadge } from "@/components/plan-badge";
 import { GlobalQualitySelector } from "@/components/global-quality-selector";
 import { FileList } from "@/components/file-list";
@@ -24,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api-client";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ import { cn } from "@/lib/utils";
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const { isOnline } = useOnlineDetector();
 
   const {
     uploadProgress,
@@ -134,6 +137,18 @@ export default function UploadWithProgress() {
       </div>
 
       <div className="flex flex-col gap-4">
+        {/* Offline indicator */}
+        {!isOnline && (
+          <div className="flex items-center justify-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <Badge variant="destructive" className="text-xs">
+              📡 Offline
+            </Badge>
+            <span className="text-sm text-destructive">
+              No internet connection. Uploads and conversions are paused.
+            </span>
+          </div>
+        )}
+
         {/* Show upload box when there are no active operations */}
         {!hasActiveOperations() && (
           <div
@@ -295,11 +310,22 @@ export default function UploadWithProgress() {
                       </AlertDialog>
                     </>
                   ) : hasFilesToConvert() ? (
-                    <Button onClick={handleStartConversion} size="lg" className="w-full sm:w-auto px-8">
-                      Start converting now{" "}
-                      <span role="img" aria-label="Lightning">
-                        ⚡️
-                      </span>
+                    <Button
+                      onClick={handleStartConversion}
+                      size="lg"
+                      className="w-full sm:w-auto px-8"
+                      disabled={!isOnline}
+                    >
+                      {!isOnline ? (
+                        "Offline - Cannot Convert"
+                      ) : (
+                        <>
+                          Start converting now{" "}
+                          <span role="img" aria-label="Lightning">
+                            ⚡️
+                          </span>
+                        </>
+                      )}
                     </Button>
                   ) : hasAnyCompletedFiles() ? (
                     <div className="flex flex-col items-center gap-2">

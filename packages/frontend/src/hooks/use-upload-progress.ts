@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { abortClient } from "@/lib/abort-client";
@@ -18,6 +19,8 @@ export interface UploadProgress {
   convertedFilePath?: string;
   conversionProgress?: number;
   error?: string;
+  paused?: boolean;
+  retryCount?: number;
 }
 
 const uploadFile = async (
@@ -26,8 +29,17 @@ const uploadFile = async (
   onComplete: (filePath: string, uploadId?: string) => void,
   onError: (error: string) => void,
   abortSignal?: AbortSignal,
+  retryCount: number = 0,
 ) => {
+  const maxRetries = 3;
+
   try {
+    // Check if we're online before starting
+    if (!navigator.onLine) {
+      onError("No internet connection. Please check your connection and try again.");
+      return;
+    }
+
     // Simulate upload progress (since we can't track real FormData upload progress easily)
     let progress = 0;
     const progressInterval = setInterval(() => {
@@ -44,6 +56,18 @@ const uploadFile = async (
 
     const timeoutId = setTimeout(() => {
       clearInterval(progressInterval);
+
+      // If we have retries left and it's a timeout, try again
+      if (retryCount < maxRetries) {
+        toast.warning(`Upload timeout, retrying... (${retryCount + 1}/${maxRetries})`, {
+          description: `Retrying upload for ${file.name}`,
+        });
+        setTimeout(() => {
+          uploadFile(file, onProgress, onComplete, onError, abortSignal, retryCount + 1);
+        }, 2000);
+        return;
+      }
+
       onError("Upload timeout - file may be too large or connection is slow");
     }, 5 * 60 * 1000);
 
@@ -67,10 +91,36 @@ const uploadFile = async (
     } catch (error) {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
+
+      // Check if it's a network error and we have retries left
+      const isNetworkError =
+        error instanceof Error &&
+        (error.message.includes("fetch") ||
+          error.message.includes("network") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("NetworkError"));
+
+      if (isNetworkError && retryCount < maxRetries) {
+        toast.warning(`Network error, retrying... (${retryCount + 1}/${maxRetries})`, {
+          description: `Retrying upload for ${file.name}`,
+        });
+        setTimeout(() => {
+          uploadFile(file, onProgress, onComplete, onError, abortSignal, retryCount + 1);
+        }, 2000 * (retryCount + 1)); // Exponential backoff
+        return;
+      }
+
       throw error;
     }
   } catch (error) {
-    onError(error instanceof Error ? error.message : "Upload failed");
+    const errorMessage = error instanceof Error ? error.message : "Upload failed";
+
+    // Show specific error messages for common issues
+    if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+      onError("Network error. Please check your connection and try again.");
+    } else {
+      onError(errorMessage);
+    }
   }
 };
 
