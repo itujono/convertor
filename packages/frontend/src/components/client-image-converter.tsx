@@ -268,11 +268,6 @@ export function ClientImageConverter({
                     <FileQualitySelector
                       fileId={file.id}
                       selectedQuality={selectedQuality}
-                      availableQualities={[
-                        { value: "low", label: "Low" },
-                        { value: "medium", label: "Medium" },
-                        { value: "high", label: "High" },
-                      ]}
                       onQualityChange={onQualityChange}
                     />
                   </div>

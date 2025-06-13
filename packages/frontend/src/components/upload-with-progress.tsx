@@ -267,8 +267,6 @@ export default function UploadWithProgress() {
           </div>
           <GlobalQualitySelector
             globalQuality={qualitySelection.globalQuality}
-            availableQualities={qualitySelection.getAvailableQualities()}
-            allQualities={qualitySelection.getAllQualities()}
             onGlobalQualityChange={qualitySelection.handleGlobalQualityChange}
           />
         </div>
@@ -343,8 +341,6 @@ export default function UploadWithProgress() {
                 clientConversions={clientConversions}
                 selectedFormats={formatSelection.selectedFormats}
                 selectedQualities={qualitySelection.selectedQualities}
-                availableQualities={qualitySelection.getAvailableQualities()}
-                allQualities={qualitySelection.getAllQualities()}
                 onFormatChange={formatSelection.handleFormatChange}
                 onQualityChange={qualitySelection.handleQualityChange}
                 onFileRemove={handleFileRemove}

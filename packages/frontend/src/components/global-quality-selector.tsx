@@ -3,21 +3,27 @@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useId } from "react";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 interface GlobalQualitySelectorProps {
   globalQuality: string;
-  availableQualities: Array<{ value: string; label: string }>;
-  allQualities: Array<{ value: string; label: string }>;
   onGlobalQualityChange: (quality: string) => void;
 }
 
-export function GlobalQualitySelector({
-  globalQuality,
-  availableQualities,
-  allQualities,
-  onGlobalQualityChange,
-}: GlobalQualitySelectorProps) {
+export function GlobalQualitySelector({ globalQuality, onGlobalQualityChange }: GlobalQualitySelectorProps) {
   const id = useId();
+  const { planLimits, settings } = useAppSettings();
+
+  const availableQualities = planLimits.qualityPresets.map((preset) => ({
+    value: preset,
+    label: preset.charAt(0).toUpperCase() + preset.slice(1),
+  }));
+
+  const allQualities = settings.conversion.qualityPresets.map((preset) => ({
+    value: preset,
+    label: preset.charAt(0).toUpperCase() + preset.slice(1),
+  }));
+
   const availableValues = new Set(availableQualities.map((q) => q.value));
 
   return (

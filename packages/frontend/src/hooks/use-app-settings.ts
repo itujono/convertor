@@ -66,20 +66,24 @@ export interface AppSettingsContext {
 export function useAppSettings(): AppSettingsContext {
   const { user: authUser, session } = useAuth();
 
-  const user: User | null = authUser
-    ? {
-        id: authUser.id,
-        email: authUser.email,
-        plan: authUser.plan as UserPlan,
-        isAuthenticated: !!session,
-        usage: {
-          // Calculate proper conversions today using daily reset logic
-          conversionsToday: checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0,
-          conversionsThisMonth: authUser.conversionCount || 0, // TODO: Implement monthly tracking separately
-          storageUsedGB: 0, // TODO: Implement storage tracking
-        },
-      }
-    : null;
+  const user: User | null = useMemo(
+    () =>
+      authUser
+        ? {
+            id: authUser.id,
+            email: authUser.email,
+            plan: authUser.plan as UserPlan,
+            isAuthenticated: !!session,
+            usage: {
+              // Calculate proper conversions today using daily reset logic
+              conversionsToday: checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0,
+              conversionsThisMonth: authUser.conversionCount || 0, // TODO: Implement monthly tracking separately
+              storageUsedGB: 0, // TODO: Implement storage tracking
+            },
+          }
+        : null,
+    [authUser, session],
+  );
 
   const userPlan: UserPlan = user?.plan || AppSettings.auth.defaultPlan;
   const planLimits = getPlanLimits(userPlan);

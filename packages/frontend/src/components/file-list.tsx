@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 // Helper function to format file size (matching ClientImageConverter)
 function formatFileSize(bytes: number): string {
@@ -37,8 +38,6 @@ interface FileListProps {
   }>;
   selectedFormats: Record<string, string>;
   selectedQualities: Record<string, string>;
-  availableQualities: Array<{ value: string; label: string }>;
-  allQualities: Array<{ value: string; label: string }>;
   onFormatChange: (fileId: string, format: string) => void;
   onQualityChange: (fileId: string, quality: string) => void;
   onFileRemove: (fileId: string) => void;
@@ -54,8 +53,6 @@ export function FileList({
   clientConversions = [],
   selectedFormats,
   selectedQualities,
-  availableQualities,
-  allQualities,
   ...handlers
 }: FileListProps) {
   return (
@@ -89,8 +86,6 @@ export function FileList({
               clientConversion={clientConversion}
               selectedFormat={selectedFormat}
               selectedQuality={selectedQuality}
-              availableQualities={availableQualities}
-              allQualities={allQualities}
               onFormatChange={handlers.onFormatChange}
               onQualityChange={handlers.onQualityChange}
               onRemove={handlers.onFileRemove}
@@ -117,8 +112,6 @@ interface FileCardProps {
   };
   selectedFormat: string;
   selectedQuality: string;
-  availableQualities: Array<{ value: string; label: string }>;
-  allQualities: Array<{ value: string; label: string }>;
   onFormatChange: (fileId: string, format: string) => void;
   onQualityChange: (fileId: string, quality: string) => void;
   onRemove: (fileId: string) => void;
@@ -132,8 +125,6 @@ export function FileCard({
   clientConversion,
   selectedFormat,
   selectedQuality,
-  availableQualities,
-  allQualities,
   onFormatChange,
   onQualityChange,
   onRemove,
@@ -278,13 +269,7 @@ export function FileCard({
               selectedFormat={selectedFormat}
               onFormatChange={onFormatChange}
             />
-            <FileQualitySelector
-              fileId={file.id}
-              selectedQuality={selectedQuality}
-              availableQualities={availableQualities}
-              allQualities={allQualities}
-              onQualityChange={onQualityChange}
-            />
+            <FileQualitySelector fileId={file.id} selectedQuality={selectedQuality} onQualityChange={onQualityChange} />
           </div>
           <Button
             size="icon"
@@ -418,19 +403,23 @@ export function FileFormatSelector({
 interface FileQualitySelectorProps {
   fileId: string;
   selectedQuality: string;
-  availableQualities: Array<{ value: string; label: string }>;
-  allQualities: Array<{ value: string; label: string }>;
   onQualityChange: (fileId: string, quality: string) => void;
 }
 
-export function FileQualitySelector({
-  fileId,
-  selectedQuality,
-  availableQualities,
-  allQualities,
-  onQualityChange,
-}: FileQualitySelectorProps) {
+export function FileQualitySelector({ fileId, selectedQuality, onQualityChange }: FileQualitySelectorProps) {
   const id = useId();
+  const { planLimits, settings } = useAppSettings();
+
+  const availableQualities = planLimits.qualityPresets.map((preset) => ({
+    value: preset,
+    label: preset.charAt(0).toUpperCase() + preset.slice(1),
+  }));
+
+  const allQualities = settings.conversion.qualityPresets.map((preset) => ({
+    value: preset,
+    label: preset.charAt(0).toUpperCase() + preset.slice(1),
+  }));
+
   const availableValues = new Set(availableQualities.map((q) => q.value));
 
   return (
