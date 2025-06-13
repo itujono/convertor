@@ -132,3 +132,40 @@
     @apply cursor-pointer;
   }
 }
+
+/* Sonner toast customization */
+.sonner-toast {
+  @apply backdrop-blur-sm;
+}
+
+/* Success toasts with primary color */
+[data-sonner-toast][data-type="success"] {
+  background: hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary) / 0.3) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Info toasts with primary color accent */
+[data-sonner-toast][data-type="info"] {
+  background: hsl(var(--primary) / 0.05) !important;
+  border-color: hsl(var(--primary) / 0.2) !important;
+}
+
+[data-sonner-toast][data-type="info"] [data-icon] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Close button styling */
+[data-sonner-toast] [data-close-button] {
+  background: hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary) / 0.2) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: hsl(var(--primary) / 0.2) !important;
+}

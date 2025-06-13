@@ -17,6 +17,7 @@ export interface UploadProgress {
   downloadUrl?: string;
   convertedFileName?: string;
   convertedFilePath?: string;
+  convertedFileSize?: number;
   conversionProgress?: number;
   error?: string;
   paused?: boolean;
@@ -72,7 +73,7 @@ const uploadFile = async (
     }, 5 * 60 * 1000);
 
     try {
-      const response = await apiClient.uploadFile(file);
+      const response = await apiClient.uploadFile(file, abortSignal);
 
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
@@ -91,6 +92,15 @@ const uploadFile = async (
     } catch (error) {
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
+
+      // Check if upload was cancelled by user
+      if (error instanceof Error && error.message.includes("cancelled by user")) {
+        toast.info("Upload cancelled", {
+          description: `Upload of ${file.name} was cancelled`,
+        });
+        onError("Upload cancelled by user");
+        return;
+      }
 
       // Check if it's a network error and we have retries left
       const isNetworkError =
@@ -129,7 +139,7 @@ const convertFile = async (
   uploadId: string | undefined, // If provided, this is an async upload
   format: string,
   quality: string,
-  onComplete: (downloadUrl: string, outputPath: string, fileName?: string) => void,
+  onComplete: (downloadUrl: string, outputPath: string, fileName?: string, fileSize?: number) => void,
   onError: (error: string) => void,
   onProgress: (progress: number) => void,
   abortSignal?: AbortSignal,
@@ -206,7 +216,7 @@ const convertFile = async (
       : await apiClient.convertFile(fileIdentifier, format, quality);
 
     if (progressInterval) clearInterval(progressInterval);
-    onComplete(response.downloadUrl, response.outputPath, response.fileName);
+    onComplete(response.downloadUrl, response.outputPath, response.fileName, response.fileSize);
   } catch (error) {
     if (progressInterval) clearInterval(progressInterval);
     onError(error instanceof Error ? error.message : "Conversion failed");
@@ -312,7 +322,7 @@ export function useUploadProgress() {
                 uploadId, // Pass uploadId separately
                 targetFormat,
                 targetQuality,
-                (downloadUrl, outputPath, fileName) => {
+                (downloadUrl, outputPath, fileName, fileSize) => {
                   const fullDownloadUrl = downloadUrl.startsWith("/") ? `${API_BASE_URL}${downloadUrl}` : downloadUrl;
 
                   setUploadProgress((prev) =>
@@ -326,10 +336,16 @@ export function useUploadProgress() {
                             convertedFileName: fileName || downloadUrl.split("/").pop(),
                             convertedFilePath: outputPath,
                             conversionProgress: 100,
+                            convertedFileSize: fileSize,
                           }
                         : item,
                     ),
                   );
+
+                  // Show success toast for conversion
+                  toast.success("Conversion complete! 🎉", {
+                    description: `${fileName || "Your file"} is ready for download`,
+                  });
                 },
                 (error) => {
                   setUploadProgress((prev) =>
@@ -343,7 +359,7 @@ export function useUploadProgress() {
                 },
                 controller.signal,
               );
-            }, 3000); // 3 second delay
+            }, 2000); // 2 second delay
           }
         },
         (error) => {
@@ -371,7 +387,6 @@ export function useUploadProgress() {
     // Update UI immediately
     setUploadProgress((prev) => prev.map((item) => (item.fileId === fileId ? { ...item, aborted: true } : item)));
 
-    // Perform server-side cleanup if needed
     if (progressItem) {
       try {
         // If it's an async upload, abort it server-side
@@ -402,11 +417,11 @@ export function useUploadProgress() {
   };
 
   const clearProgress = async () => {
-    // Abort all frontend operations
+    const activeUploadsCount = uploadProgress.filter((p) => !p.completed && !p.aborted && !p.error).length;
+
     abortControllers.forEach((controller) => controller.abort());
     setAbortControllers(new Map());
 
-    // Collect upload IDs and file paths for server-side cleanup
     const uploadIds: string[] = [];
     const filePaths: string[] = [];
 
@@ -426,18 +441,22 @@ export function useUploadProgress() {
       }
     });
 
-    // Clear the progress state immediately for better UX
     setUploadProgress([]);
 
-    // Perform server-side cleanup in the background
+    if (activeUploadsCount > 0) {
+      toast.success("All operations cancelled", {
+        description: `Cancelled ${activeUploadsCount} active upload${
+          activeUploadsCount > 1 ? "s" : ""
+        } and conversions`,
+      });
+    }
+
     try {
-      // Abort all uploads for this user
       const abortResult = await abortClient.abortAllUploads();
       if (abortResult.success && abortResult.abortedCount && abortResult.abortedCount > 0) {
         console.log(`✅ Aborted ${abortResult.abortedCount} server-side uploads`);
       }
 
-      // Delete any completed files
       if (filePaths.length > 0) {
         const deleteResult = await abortClient.deleteFiles(filePaths);
         if (deleteResult.success) {

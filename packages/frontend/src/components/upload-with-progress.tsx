@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api-client";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
@@ -95,11 +96,25 @@ export default function UploadWithProgress() {
     try {
       setIsDownloadingZip(true);
       const convertedFilePaths = getConvertedFilePaths();
-      if (convertedFilePaths.length > 0) {
-        await apiClient.downloadZip(convertedFilePaths);
+
+      if (convertedFilePaths.length === 0) {
+        toast.error("No files to download", {
+          description: "No converted files are available for download.",
+        });
+        return;
       }
+
+      console.log("Downloading zip with paths:", convertedFilePaths);
+      await apiClient.downloadZip(convertedFilePaths);
+
+      toast.success("Download started", {
+        description: `Downloading ${convertedFilePaths.length} file${convertedFilePaths.length > 1 ? "s" : ""} as ZIP`,
+      });
     } catch (error) {
       console.error("Failed to download zip:", error);
+      toast.error("Download failed", {
+        description: error instanceof Error ? error.message : "Failed to prepare zip file",
+      });
     } finally {
       setIsDownloadingZip(false);
     }

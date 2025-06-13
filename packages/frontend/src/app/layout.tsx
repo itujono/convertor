@@ -19,7 +19,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ClientAuthProvider>
           <TooltipProvider>
             {children}
-            <Toaster position="top-right" richColors closeButton duration={4000} />
+            <Toaster
+              position="top-right"
+              richColors
+              closeButton
+              duration={4000}
+              toastOptions={{
+                style: {
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  color: "hsl(var(--card-foreground))",
+                },
+                className: "sonner-toast",
+              }}
+              theme="system"
+            />
           </TooltipProvider>
         </ClientAuthProvider>
       </body>

@@ -207,21 +207,15 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       region: process.env.AWS_REGION,
     });
 
-    // Add a longer delay and retry logic for S3 eventual consistency
-    console.log("⏳ Waiting for S3 consistency with retry logic...");
+    // Quick S3 consistency check with reduced attempts
+    console.log("🔍 Quick S3 file existence check...");
 
     let fileExists = false;
-    const maxConsistencyAttempts = 5;
+    const maxConsistencyAttempts = 2; // Reduced from 5 to 2
 
     for (let attempt = 1; attempt <= maxConsistencyAttempts; attempt++) {
-      console.log(
-        `🔍 Checking if file exists in S3 (attempt ${attempt}/${maxConsistencyAttempts})...`
-      );
-
       try {
         fileExists = await checkFileExists(actualFilePath);
-        console.log(`📋 File existence check result: ${fileExists}`);
-
         if (fileExists) {
           console.log(`✅ File found on attempt ${attempt}`);
           break;
@@ -234,22 +228,17 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       }
 
       if (attempt < maxConsistencyAttempts) {
-        const delay = 2000 * attempt; // 2s, 4s, 6s, 8s delays
-        console.log(
-          `⏳ File not found, waiting ${delay}ms before next attempt...`
-        );
+        const delay = 1000; // Fixed 1 second delay instead of exponential
+        console.log(`⏳ File not found, waiting ${delay}ms before retry...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
     if (!fileExists) {
-      console.error(
-        "❌ File does not exist in S3 after all attempts:",
-        actualFilePath
-      );
+      console.error("❌ File does not exist in S3:", actualFilePath);
       return c.json(
         {
-          error: `File not found: The uploaded file could not be found in storage after multiple attempts. This may happen if there was an upload issue or the file was already processed. Please try uploading the file again.`,
+          error: `File not found: The uploaded file could not be found in storage. Please try uploading the file again.`,
         },
         404
       );
@@ -324,9 +313,9 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         command = applyQualitySettings(command, format, quality);
 
         const conversionTimeout = setTimeout(() => {
-          console.error("❌ SVG conversion timeout after 5 minutes");
+          console.error("❌ SVG conversion timeout after 2 minutes");
           reject(new Error("SVG conversion timeout"));
-        }, 5 * 60 * 1000);
+        }, 2 * 60 * 1000); // Reduced from 5 minutes to 2 minutes
 
         command
           .on("start", (commandLine: string) => {
@@ -347,30 +336,9 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
           .run();
       });
     } else {
-      // Test FFmpeg with a simple probe command first (only for non-SVG files)
-      console.log("🧪 Testing FFmpeg with probe command...");
-      try {
-        await new Promise((resolve, reject) => {
-          ffmpeg.ffprobe(tempInputPath, (err: any, metadata: any) => {
-            if (err) {
-              console.error("❌ FFmpeg probe failed:", err);
-              reject(err);
-            } else {
-              console.log(
-                "✅ FFmpeg probe successful, file duration:",
-                metadata.format.duration
-              );
-              resolve(null);
-            }
-          });
-        });
-      } catch (testError: any) {
-        console.error(
-          "❌ FFmpeg probe failed, aborting conversion:",
-          testError
-        );
-        throw new Error(`FFmpeg probe failed: ${testError.message}`);
-      }
+      console.log(
+        "📁 Non-SVG file detected, proceeding with direct conversion"
+      );
     }
 
     console.log("💾 Logging conversion to database");
@@ -399,11 +367,11 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       console.log("⚙️ Quality settings applied");
 
       const conversionTimeout = setTimeout(() => {
-        console.error("❌ FFmpeg conversion timeout after 5 minutes");
+        console.error("❌ FFmpeg conversion timeout after 2 minutes");
         reject(
           new Error("Conversion timeout - file may be too large or complex")
         );
-      }, 5 * 60 * 1000);
+      }, 2 * 60 * 1000); // Reduced from 5 minutes to 2 minutes
 
       command
         .on("start", (commandLine: string) => {
@@ -520,6 +488,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       outputPath: uploadResult.filePath,
       downloadUrl: signedUrl,
       fileName: displayFileName, // Add user-friendly filename
+      fileSize: uploadResult.fileSize, // Add converted file size
     });
   } catch (error: any) {
     console.error("💥 CONVERSION ERROR:", error);
@@ -587,11 +556,11 @@ function applyQualitySettings(
   } else if (isVideo) {
     switch (quality) {
       case "low":
-        return command.outputOptions(["-crf", "35", "-preset", "fast"]);
+        return command.outputOptions(["-crf", "35", "-preset", "ultrafast"]);
       case "high":
-        return command.outputOptions(["-crf", "18", "-preset", "slow"]);
+        return command.outputOptions(["-crf", "18", "-preset", "fast"]); // Changed from slow to fast
       default: // medium
-        return command.outputOptions(["-crf", "23", "-preset", "medium"]);
+        return command.outputOptions(["-crf", "23", "-preset", "fast"]); // Changed from medium to fast
     }
   } else if (isAudio) {
     switch (quality) {

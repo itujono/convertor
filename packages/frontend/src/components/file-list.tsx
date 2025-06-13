@@ -142,7 +142,7 @@ export function FileCard({
 
         {/* File info */}
         <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="truncate text-[13px] font-medium">
+          <p className="truncate text-sm max-w-[20rem] lg:max-w-[26rem] font-medium">
             {file.file instanceof File ? file.file.name : file.file.name}
           </p>
           <p className="text-muted-foreground text-xs">
@@ -151,6 +151,24 @@ export function FileCard({
             {isCompleted && fileProgress?.convertedFileName && (
               <>
                 {" → "}
+                {fileProgress.convertedFileSize && (
+                  <>
+                    {formatFileSize(fileProgress.convertedFileSize)}
+                    {(() => {
+                      const compressionRatio = Math.round(
+                        ((fileSize - fileProgress.convertedFileSize) / fileSize) * 100,
+                      );
+                      if (compressionRatio > 0) {
+                        return <span className="text-green-600 ml-1">(-{compressionRatio}%)</span>;
+                      } else if (compressionRatio < 0) {
+                        return <span className="text-orange-600 ml-1">(+{Math.abs(compressionRatio)}%)</span>;
+                      } else {
+                        return <span className="text-gray-600 ml-1">(same size)</span>;
+                      }
+                    })()}
+                    {" • "}
+                  </>
+                )}
                 <span className="text-green-600">Converted successfully</span>
               </>
             )}

@@ -45,7 +45,7 @@ class ApiClient {
     return this.request("/api/user");
   }
 
-  async uploadFile(file: File) {
+  async uploadFile(file: File, abortSignal?: AbortSignal) {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -57,17 +57,25 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
-    const controller = new AbortController();
+    // Create a combined abort controller that responds to both timeout and external abort
+    const internalController = new AbortController();
     const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, 10 * 60 * 1000); // 10 minute
+      internalController.abort();
+    }, 10 * 60 * 1000); // 10 minute timeout
+
+    // If external abort signal is provided, listen to it
+    if (abortSignal) {
+      abortSignal.addEventListener("abort", () => {
+        internalController.abort();
+      });
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: "POST",
         headers,
         body: formData, // Don't set Content-Type for FormData
-        signal: controller.signal,
+        signal: internalController.signal,
       });
 
       clearTimeout(timeoutId);
@@ -81,6 +89,10 @@ class ApiClient {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === "AbortError") {
+        // Check if it was aborted by external signal or timeout
+        if (abortSignal?.aborted) {
+          throw new Error("Upload cancelled by user");
+        }
         throw new Error("Upload timeout - file may be too large");
       }
       throw error;
@@ -292,6 +304,7 @@ export interface ConversionResponse {
   outputPath: string;
   downloadUrl: string;
   fileName?: string; // User-friendly filename for display
+  fileSize?: number; // Size of the converted file in bytes
 }
 
 export interface Subscription {

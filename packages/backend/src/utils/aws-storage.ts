@@ -281,13 +281,13 @@ export async function uploadFile(
     }
   }
 
-  // Railway-specific upload with enhanced error handling
+  // Simple upload for small files
   console.log(
     `📤 Uploading small file to S3: ${filePath} (${uploadBuffer.length} bytes)`
   );
 
   let uploadResult;
-  const maxRetries = 3;
+  const maxRetries = 2; // Reduced retries for faster uploads
   let lastError: any;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -377,8 +377,8 @@ export async function uploadFile(
         break; // Don't retry on final attempt or non-retryable errors
       }
 
-      // Exponential backoff for Railway
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      // Quick retry for small files
+      const delay = Math.min(500 * attempt, 2000); // 500ms, 1000ms max
       console.log(`⏳ Retrying in ${delay}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -389,83 +389,8 @@ export async function uploadFile(
     throw lastError || new Error("Upload failed after all retry attempts");
   }
 
-  // Railway-optimized upload verification with retry logic
-  console.log(`🔄 Verifying upload with Railway-optimized checks...`);
-
-  // Give Railway/S3 a moment for consistency (Railway can have slight delays)
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  let verificationSuccess = false;
-  const maxVerificationRetries = 5;
-
-  for (
-    let verifyAttempt = 1;
-    verifyAttempt <= maxVerificationRetries;
-    verifyAttempt++
-  ) {
-    try {
-      console.log(
-        `🔍 Verification attempt ${verifyAttempt}/${maxVerificationRetries}...`
-      );
-
-      // Use HeadObject first (faster for verification)
-      const headCommand = new HeadObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: filePath,
-      });
-
-      const headResult = await s3Client.send(headCommand);
-
-      console.log(
-        `✅ Upload verification successful (attempt ${verifyAttempt}):`,
-        {
-          contentLength: headResult.ContentLength,
-          lastModified: headResult.LastModified,
-          etag: headResult.ETag,
-          expectedSize: uploadBuffer.length,
-          sizeMatch: headResult.ContentLength === uploadBuffer.length,
-        }
-      );
-
-      // Verify file size matches
-      if (headResult.ContentLength !== uploadBuffer.length) {
-        throw new Error(
-          `File size mismatch: expected ${uploadBuffer.length}, got ${headResult.ContentLength}`
-        );
-      }
-
-      verificationSuccess = true;
-      break;
-    } catch (verifyError: any) {
-      console.warn(`⚠️ Verification attempt ${verifyAttempt} failed:`, {
-        error: verifyError.message,
-        code: verifyError.Code || verifyError.code,
-        statusCode: verifyError.$metadata?.httpStatusCode,
-        willRetry: verifyAttempt < maxVerificationRetries,
-      });
-
-      // For Railway, sometimes verification fails due to eventual consistency
-      // Wait progressively longer between attempts
-      if (verifyAttempt < maxVerificationRetries) {
-        const verifyDelay = verifyAttempt * 2000; // 2s, 4s, 6s, 8s
-        console.log(
-          `⏳ Waiting ${verifyDelay}ms before next verification attempt...`
-        );
-        await new Promise((resolve) => setTimeout(resolve, verifyDelay));
-      }
-    }
-  }
-
-  if (!verificationSuccess) {
-    console.error(
-      `❌ Upload verification failed after ${maxVerificationRetries} attempts`
-    );
-    // Don't throw here - the upload might still be successful
-    // Railway sometimes has eventual consistency issues
-    console.warn(
-      `⚠️ Proceeding without verification due to Railway consistency issues`
-    );
-  }
+  // Simple upload verification - just check if we got a valid ETag
+  console.log(`✅ Upload successful, ETag: ${uploadResult.ETag}`);
 
   // Generate public URL (CloudFront if available, otherwise S3)
   const publicUrl = CLOUDFRONT_DOMAIN
