@@ -418,7 +418,7 @@ export async function uploadConvertedFile(
 
   const fileBuffer = await fs.readFile(localFilePath);
   const baseName = path.parse(originalFileName).name;
-  const convertedFileName = `${baseName}.${targetFormat}`;
+  const convertedFileName = `${baseName}_converted.${targetFormat}`;
   const uniqueFileName = `${crypto.randomUUID()}_${convertedFileName}`;
   const filePath = `${userId}/converted/${uniqueFileName}`;
 

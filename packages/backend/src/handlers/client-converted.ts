@@ -98,7 +98,7 @@ export async function clientConvertedHandler(
       message: "Client-converted file saved successfully",
       filePath: uploadResult.filePath,
       downloadUrl: signedUrl,
-      fileName: uploadResult.fileName,
+      fileName: convertedFileName, // Return user-friendly filename (no UUID)
       fileSize: uploadResult.fileSize,
     });
   } catch (error: any) {

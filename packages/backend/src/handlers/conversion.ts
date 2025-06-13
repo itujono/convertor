@@ -479,7 +479,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     // Clean up progress tracking
     conversionProgress.delete(progressKey);
 
-    // Create user-friendly filename for display
+    // Create user-friendly filename for display (consistent with client-side)
     const fileBaseName = originalFileName.split(".").slice(0, -1).join(".");
     const displayFileName = `${fileBaseName}_converted.${format}`;
 
@@ -487,8 +487,8 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       message: "Conversion completed successfully",
       outputPath: uploadResult.filePath,
       downloadUrl: signedUrl,
-      fileName: displayFileName, // Add user-friendly filename
-      fileSize: uploadResult.fileSize, // Add converted file size
+      fileName: displayFileName, // User-friendly filename (no UUID)
+      fileSize: uploadResult.fileSize,
     });
   } catch (error: any) {
     console.error("💥 CONVERSION ERROR:", error);
