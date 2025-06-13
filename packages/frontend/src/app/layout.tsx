@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { ClientAuthProvider } from "@/lib/auth-context";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Force dynamic rendering
 export const dynamic = "force-dynamic";
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="font-sans">
-        <ClientAuthProvider>{children}</ClientAuthProvider>
+        <ClientAuthProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ClientAuthProvider>
       </body>
     </html>
   );

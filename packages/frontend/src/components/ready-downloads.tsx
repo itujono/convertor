@@ -29,11 +29,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient, type UserFile, type UserFilesResponse } from "@/lib/api-client";
 import { formatBytes } from "@/hooks/use-file-upload";
 import { useAuth } from "@/lib/auth-context";
 
-// Helper component for image preview with dialog
 function ImagePreview({ file }: { file: UserFile }) {
   const isImage = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
     file.converted_format.toLowerCase(),
@@ -109,6 +109,32 @@ const formatRelativeTime = (dateString: string) => {
     return `${days} day${days === 1 ? "" : "s"} ago`;
   }
 };
+
+function FileCardSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
+      <div className="flex gap-3 flex-1 min-w-0">
+        <Skeleton className="aspect-square size-10 shrink-0 rounded" />
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 mb-1">
+            <Skeleton className="h-4 w-32 sm:w-40" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+          <div className="flex flex-wrap items-center gap-y-1 gap-x-4 sm:gap-x-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-12" />
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <Skeleton className="h-8 w-20 flex-1 sm:flex-none" />
+        <Skeleton className="h-8 w-8 shrink-0" />
+      </div>
+    </div>
+  );
+}
 
 export function ReadyDownloads() {
   const [userFiles, setUserFiles] = useState<UserFile[]>([]);
@@ -239,10 +265,26 @@ export function ReadyDownloads() {
     return (
       <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">Ready to Download</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>Ready to Download</CardTitle>
+            <div className="flex gap-2 flex-row sm:items-center sm:gap-2">
+              <Skeleton className="h-8 w-32 sm:w-auto" />
+              <Skeleton className="h-8 w-8" />
+            </div>
+          </div>
+          <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
+            <p className="text-sm">
+              <TriangleAlert className="me-3 -mt-0.5 inline-flex text-amber-500" size={16} aria-hidden="true" />
+              Files are automatically removed as soon as they are downloaded or after 24 hours
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">Loading your files...</div>
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <FileCardSkeleton key={index} />
+            ))}
+          </div>
         </CardContent>
       </Card>
     );

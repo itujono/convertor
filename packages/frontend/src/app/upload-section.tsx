@@ -5,9 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import UploadWithProgress from "@/components/upload-with-progress";
 import { ReadyDownloads } from "@/components/ready-downloads";
 import { useAuth } from "@/lib/auth-context";
+import { AppSettings } from "@/lib/app-settings";
 
 export default function UploadSection() {
-  const { session, isLoading, signInWithGoogle } = useAuth();
+  const { session, isLoading, signInWithGoogle, user } = useAuth();
 
   return (
     <div className="max-w-5xl mx-auto space-y-8" id="upload">
@@ -34,7 +35,11 @@ export default function UploadSection() {
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-4 sm:px-0">
             Your files are processed securely.
             <br className="hidden sm:block" />
-            <span className="block sm:inline mt-1 sm:mt-0">Free for files up to 100MB</span>
+            {user?.plan === "free" && (
+              <span className="block sm:inline mt-1 sm:mt-0">
+                Free for files up to {AppSettings.plans.free.maxFileSizeMB}MB
+              </span>
+            )}
           </p>
         </div>
       </div>
