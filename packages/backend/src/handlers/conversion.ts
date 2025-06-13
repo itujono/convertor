@@ -511,10 +511,15 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     // Clean up progress tracking
     conversionProgress.delete(progressKey);
 
+    // Create user-friendly filename for display
+    const fileBaseName = originalFileName.split(".").slice(0, -1).join(".");
+    const displayFileName = `${fileBaseName}_converted.${format}`;
+
     return c.json({
       message: "Conversion completed successfully",
       outputPath: uploadResult.filePath,
       downloadUrl: signedUrl,
+      fileName: displayFileName, // Add user-friendly filename
     });
   } catch (error: any) {
     console.error("💥 CONVERSION ERROR:", error);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { abortClient } from "@/lib/abort-client";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -78,7 +79,7 @@ const convertFile = async (
   uploadId: string | undefined, // If provided, this is an async upload
   format: string,
   quality: string,
-  onComplete: (downloadUrl: string, outputPath: string) => void,
+  onComplete: (downloadUrl: string, outputPath: string, fileName?: string) => void,
   onError: (error: string) => void,
   onProgress: (progress: number) => void,
   abortSignal?: AbortSignal,
@@ -155,7 +156,7 @@ const convertFile = async (
       : await apiClient.convertFile(fileIdentifier, format, quality);
 
     if (progressInterval) clearInterval(progressInterval);
-    onComplete(response.downloadUrl, response.outputPath);
+    onComplete(response.downloadUrl, response.outputPath, response.fileName);
   } catch (error) {
     if (progressInterval) clearInterval(progressInterval);
     onError(error instanceof Error ? error.message : "Conversion failed");
@@ -261,7 +262,7 @@ export function useUploadProgress() {
                 uploadId, // Pass uploadId separately
                 targetFormat,
                 targetQuality,
-                (downloadUrl, outputPath) => {
+                (downloadUrl, outputPath, fileName) => {
                   const fullDownloadUrl = downloadUrl.startsWith("/") ? `${API_BASE_URL}${downloadUrl}` : downloadUrl;
 
                   setUploadProgress((prev) =>
@@ -272,7 +273,7 @@ export function useUploadProgress() {
                             converting: false,
                             converted: true,
                             downloadUrl: fullDownloadUrl,
-                            convertedFileName: downloadUrl.split("/").pop(),
+                            convertedFileName: fileName || downloadUrl.split("/").pop(),
                             convertedFilePath: outputPath,
                             conversionProgress: 100,
                           }
@@ -305,14 +306,43 @@ export function useUploadProgress() {
     setAbortControllers(newControllers);
   };
 
-  const abortUpload = (fileId: string) => {
+  const abortUpload = async (fileId: string) => {
     const controller = abortControllers.get(fileId);
+    const progressItem = uploadProgress.find((item) => item.fileId === fileId);
+
+    // Abort frontend operation
     if (controller) {
       controller.abort();
-      setUploadProgress((prev) => prev.map((item) => (item.fileId === fileId ? { ...item, aborted: true } : item)));
       const newControllers = new Map(abortControllers);
       newControllers.delete(fileId);
       setAbortControllers(newControllers);
+    }
+
+    // Update UI immediately
+    setUploadProgress((prev) => prev.map((item) => (item.fileId === fileId ? { ...item, aborted: true } : item)));
+
+    // Perform server-side cleanup if needed
+    if (progressItem) {
+      try {
+        // If it's an async upload, abort it server-side
+        if (!progressItem.completed && !progressItem.error) {
+          await abortClient.abortUpload(fileId);
+        }
+
+        // If there are files to clean up
+        const filesToDelete: string[] = [];
+        if (progressItem.convertedFilePath) {
+          filesToDelete.push(progressItem.convertedFilePath);
+        }
+
+        if (filesToDelete.length > 0) {
+          await abortClient.deleteFiles(filesToDelete);
+          console.log(`✅ Cleaned up files for ${fileId}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Server-side cleanup failed for ${fileId}:`, error);
+        // Don't throw - the UI abort was successful
+      }
     }
   };
 
@@ -321,10 +351,53 @@ export function useUploadProgress() {
     setUploadProgress((prev) => prev.filter((item) => item.fileId !== fileId));
   };
 
-  const clearProgress = () => {
+  const clearProgress = async () => {
+    // Abort all frontend operations
     abortControllers.forEach((controller) => controller.abort());
     setAbortControllers(new Map());
+
+    // Collect upload IDs and file paths for server-side cleanup
+    const uploadIds: string[] = [];
+    const filePaths: string[] = [];
+
+    uploadProgress.forEach((progress) => {
+      // If there's an active upload or conversion, we need to abort it server-side
+      if (!progress.completed && !progress.aborted && !progress.error) {
+        // This is likely an async upload with uploadId
+        const uploadId = progress.fileId; // In some cases, fileId might be the uploadId
+        if (uploadId) {
+          uploadIds.push(uploadId);
+        }
+      }
+
+      // If there are completed uploads, collect file paths for cleanup
+      if (progress.completed && progress.convertedFilePath) {
+        filePaths.push(progress.convertedFilePath);
+      }
+    });
+
+    // Clear the progress state immediately for better UX
     setUploadProgress([]);
+
+    // Perform server-side cleanup in the background
+    try {
+      // Abort all uploads for this user
+      const abortResult = await abortClient.abortAllUploads();
+      if (abortResult.success && abortResult.abortedCount && abortResult.abortedCount > 0) {
+        console.log(`✅ Aborted ${abortResult.abortedCount} server-side uploads`);
+      }
+
+      // Delete any completed files
+      if (filePaths.length > 0) {
+        const deleteResult = await abortClient.deleteFiles(filePaths);
+        if (deleteResult.success) {
+          console.log(`✅ Cleaned up ${filePaths.length} files from S3`);
+        }
+      }
+    } catch (error) {
+      console.warn("⚠️ Some server-side cleanup operations failed:", error);
+      // Don't throw - the UI cleanup was successful
+    }
   };
 
   const areAllConversionsComplete = () => {

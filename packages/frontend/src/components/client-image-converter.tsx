@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DownloadIcon, CheckCircleIcon, AlertCircleIcon, ZapIcon, UploadIcon, Trash2Icon, XIcon } from "lucide-react";
+import { DownloadIcon, AlertCircleIcon, ZapIcon, UploadIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useClientImageConverter, formatFileSize } from "@/hooks/use-client-image-converter";
 import { FileFormatSelector, FileQualitySelector, FileIcon } from "@/components/file-list";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
@@ -25,7 +25,6 @@ interface ClientImageConverterProps {
   className?: string;
 }
 
-// Helper component for image preview with dialog
 function ImageQuickPreview({ file }: { file: FileWithPreview }) {
   return (
     <Dialog>
@@ -159,7 +158,6 @@ export function ClientImageConverter({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -180,7 +178,6 @@ export function ClientImageConverter({
         </div>
       </div>
 
-      {/* File list */}
       <div className="w-full space-y-2">
         {clientSideFiles.map((file) => {
           const conversion = getConversionForFile(file.id);
@@ -200,7 +197,6 @@ export function ClientImageConverter({
               )}
             >
               <div className="flex items-center gap-3 flex-1">
-                {/* File preview/icon */}
                 <div
                   className={cn(
                     "flex size-10 items-center justify-center rounded border-2 border-dashed shrink-0",
@@ -210,7 +206,6 @@ export function ClientImageConverter({
                   {isImage && file.preview ? <ImageQuickPreview file={file} /> : <FileIcon file={file} />}
                 </div>
 
-                {/* File info */}
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <p className="truncate text-[13px] font-medium">
                     {file.file instanceof File ? file.file.name : file.file.name}
@@ -236,7 +231,6 @@ export function ClientImageConverter({
                 </div>
               </div>
 
-              {/* Controls */}
               {isCompleted && conversion?.result ? (
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Button
@@ -319,7 +313,6 @@ export function ClientImageConverter({
         })}
       </div>
 
-      {/* Action buttons */}
       <div className="flex items-center justify-center gap-2 pt-4">
         {areAllConversionsComplete && hasCompletedConversions ? (
           <div className="flex flex-col items-center gap-2">
@@ -367,7 +360,6 @@ export function ClientImageConverter({
         )}
       </div>
 
-      {/* Benefits info */}
       {/* {!hasActiveConversions && !hasCompletedConversions && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
           <div className="flex items-start gap-2">

@@ -32,7 +32,7 @@ export default function UploadSection() {
 
         <div className="mt-6 sm:mt-8 text-center">
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-4 sm:px-0">
-            Your files are processed securely and automatically deleted after conversion.
+            Your files are processed securely.
             <br className="hidden sm:block" />
             <span className="block sm:inline mt-1 sm:mt-0">Free for files up to 100MB</span>
           </p>

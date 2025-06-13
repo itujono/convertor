@@ -182,3 +182,86 @@ async function ensureInitialized() {
     setInterval(cleanupUploadQueue, 10 * 60 * 1000);
   }
 }
+
+// Abort upload and cleanup
+export async function abortUpload(
+  uploadId: string
+): Promise<{ success: boolean; message: string }> {
+  const upload = uploadQueue.get(uploadId);
+
+  if (!upload) {
+    return { success: false, message: "Upload not found" };
+  }
+
+  console.log(`🛑 Aborting upload: ${uploadId} (status: ${upload.status})`);
+
+  try {
+    // Check if upload was completed and we have S3 file path, delete from S3 first
+    if (upload.status === "completed" && upload.s3FilePath) {
+      try {
+        const { deleteFile } = await import("./aws-storage");
+        await deleteFile(upload.s3FilePath);
+        console.log(`🗑️ Deleted S3 file: ${upload.s3FilePath}`);
+      } catch (s3Error) {
+        console.warn(`⚠️ Failed to delete S3 file: ${s3Error}`);
+      }
+    }
+
+    // Clean up local file if it exists
+    if (upload.localPath) {
+      try {
+        await fs.unlink(upload.localPath);
+        console.log(`🗑️ Cleaned up local file: ${upload.localPath}`);
+      } catch (cleanupError) {
+        console.warn(`⚠️ Failed to cleanup local file: ${cleanupError}`);
+      }
+    }
+
+    // Update status to failed/aborted
+    upload.status = "failed";
+    upload.error = "Upload aborted by user";
+    uploadQueue.set(uploadId, upload);
+
+    return {
+      success: true,
+      message: "Upload aborted and cleaned up successfully",
+    };
+  } catch (error: any) {
+    console.error(`❌ Failed to abort upload ${uploadId}:`, error);
+    return {
+      success: false,
+      message: error.message || "Failed to abort upload",
+    };
+  }
+}
+
+// Abort all uploads for a user
+export async function abortAllUploadsForUser(
+  userId: string
+): Promise<{ success: boolean; abortedCount: number }> {
+  const userUploads = Array.from(uploadQueue.values()).filter(
+    (upload) => upload.userId === userId
+  );
+
+  if (userUploads.length === 0) {
+    return { success: true, abortedCount: 0 };
+  }
+
+  console.log(`🛑 Aborting ${userUploads.length} uploads for user: ${userId}`);
+
+  let abortedCount = 0;
+  const abortPromises = userUploads.map(async (upload) => {
+    try {
+      const result = await abortUpload(upload.id);
+      if (result.success) {
+        abortedCount++;
+      }
+    } catch (error) {
+      console.error(`❌ Failed to abort upload ${upload.id}:`, error);
+    }
+  });
+
+  await Promise.all(abortPromises);
+
+  return { success: true, abortedCount };
+}

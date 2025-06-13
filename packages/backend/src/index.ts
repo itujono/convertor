@@ -4,6 +4,17 @@ import { authMiddleware } from "./middleware/auth";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
 import { uploadStatusHandler } from "./handlers/upload-status";
+import {
+  initiatePresignedUploadHandler,
+  completeMultipartUploadHandler,
+  abortMultipartUploadHandler,
+} from "./handlers/presigned-upload";
+import {
+  abortUploadHandler,
+  abortAllUploadsHandler,
+  abortConversionHandler,
+  deleteFilesHandler,
+} from "./handlers/abort";
 import { clientConvertedHandler } from "./handlers/client-converted";
 import {
   convertHandler,
@@ -207,6 +218,17 @@ app.get("/api/health", healthHandler);
 app.get("/api/user", getUserHandler);
 app.post("/api/upload", uploadHandler);
 app.get("/api/upload/status/:uploadId", uploadStatusHandler);
+
+// Presigned upload routes
+app.post("/api/upload/presigned", initiatePresignedUploadHandler);
+app.post("/api/upload/complete-multipart", completeMultipartUploadHandler);
+app.post("/api/upload/abort-multipart", abortMultipartUploadHandler);
+
+// Abort routes
+app.post("/api/abort/upload", abortUploadHandler);
+app.post("/api/abort/all-uploads", abortAllUploadsHandler);
+app.post("/api/abort/conversion", abortConversionHandler);
+app.delete("/api/files", deleteFilesHandler);
 app.post("/api/client-converted", clientConvertedHandler);
 app.post("/api/convert", convertHandler);
 app.get("/api/convert/progress/*", getConversionProgressHandler);

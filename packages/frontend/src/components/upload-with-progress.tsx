@@ -59,15 +59,15 @@ export default function UploadWithProgress() {
     },
   });
 
-  const handleFileRemove = (fileId: string) => {
-    handleProgressFileRemoved(fileId);
+  const handleFileRemove = async (fileId: string) => {
+    await handleProgressFileRemoved(fileId);
     formatSelection.handleFileRemoved(fileId);
     qualitySelection.handleFileRemoved(fileId);
     fileUploadActions.removeFile(fileId);
   };
 
-  const handleClearAll = () => {
-    clearProgress();
+  const handleClearAll = async () => {
+    await clearProgress();
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();
@@ -102,8 +102,8 @@ export default function UploadWithProgress() {
     }
   };
 
-  const handleAbortAll = () => {
-    clearProgress();
+  const handleAbortAll = async () => {
+    await clearProgress();
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();

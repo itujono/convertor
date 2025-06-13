@@ -22,8 +22,8 @@ export async function uploadHandler(c: Context<{ Variables: Variables }>) {
       `Queuing file upload: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
     );
 
-    // For small files (<5MB), use synchronous upload
-    if (file.size < 5 * 1024 * 1024) {
+    // For small files (<100MB), use synchronous upload
+    if (file.size < 100 * 1024 * 1024) {
       console.log(`📤 Small file detected, using synchronous upload...`);
 
       try {

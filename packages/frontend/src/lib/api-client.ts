@@ -291,6 +291,7 @@ export interface ConversionResponse {
   message: string;
   outputPath: string;
   downloadUrl: string;
+  fileName?: string; // User-friendly filename for display
 }
 
 export interface Subscription {

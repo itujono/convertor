@@ -1,10 +1,10 @@
 "use client";
 
-import { Trash2Icon, UploadIcon, XIcon, DownloadIcon } from "lucide-react";
+import { Trash2Icon, UploadIcon, XIcon, DownloadIcon, AlertCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type FileWithPreview, formatBytes } from "@/hooks/use-file-upload";
+import { Progress } from "@/components/ui/progress";
+import { type FileWithPreview } from "@/hooks/use-file-upload";
 import type { UploadProgress } from "@/hooks/use-upload-progress";
-import { FileUploadProgress } from "./file-upload-progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { getAvailableFormats, getFileIconType } from "@/lib/file-formats";
@@ -13,6 +13,16 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+
+// Helper function to format file size (matching ClientImageConverter)
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
 
 interface FileListProps {
   files: FileWithPreview[];
@@ -101,92 +111,155 @@ export function FileCard({
   onRemove,
   onAbortUpload,
 }: FileCardProps) {
-  const isUploading = fileProgress && !fileProgress.completed;
-  const isProcessing = fileProgress && (isUploading || fileProgress.converting);
+  const isUploading = fileProgress && !fileProgress.completed && !fileProgress.aborted && !fileProgress.error;
+  const isConverting = fileProgress && fileProgress.converting;
   const isCompleted = fileProgress && fileProgress.converted;
+  const hasError = fileProgress && fileProgress.error;
+  const isProcessing = isUploading || isConverting;
 
   // Check if the file is an image
   const fileType = file.file instanceof File ? file.file.type : file.file.type;
   const isImage = fileType.startsWith("image/");
+  const fileSize = file.file instanceof File ? file.file.size : file.file.size;
 
   return (
     <div
-      data-uploading={isUploading || undefined}
-      className="flex flex-col gap-2 rounded-lg border p-3 transition-opacity duration-300"
+      className={cn(
+        "border-input flex w-full items-center gap-3 rounded-lg border p-3",
+        isCompleted && "bg-green-50/50 border-green-200",
+      )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 overflow-hidden in-data-[uploading=true]:opacity-50 min-w-0 flex-1">
-          <div
-            className={cn(
-              "flex aspect-square size-10 shrink-0 items-center justify-center rounded overflow-hidden",
-              isImage ? "border-none" : "border",
-            )}
-          >
-            {isImage && file.preview ? <ImageQuickPreview file={file} /> : <FileIcon file={file} />}
-          </div>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <p className="truncate text-[13px] font-medium">
-              {file.file instanceof File ? file.file.name : file.file.name}
-            </p>
-            <p className="text-muted-foreground text-xs">
-              {formatBytes(file.file instanceof File ? file.file.size : file.file.size)}
-            </p>
-          </div>
+      <div className="flex items-center gap-3 flex-1">
+        {/* File preview/icon */}
+        <div
+          className={cn(
+            "flex size-10 items-center justify-center rounded border-2 border-dashed shrink-0",
+            isImage ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50",
+          )}
+        >
+          {isImage && file.preview ? <ImageQuickPreview file={file} /> : <FileIcon file={file} />}
         </div>
 
-        {/* Show download button when converted, format selector and remove button when not processing and not completed */}
-        {isCompleted && fileProgress?.downloadUrl ? (
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.open(fileProgress.downloadUrl, "_blank")}
-              className="h-8 px-3 text-xs flex-1 sm:flex-none"
-            >
-              <DownloadIcon className="mr-1 size-3" />
-              Download
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onRemove(file.id)}
-              className="size-8 text-muted-foreground hover:text-red-600 shrink-0"
-              aria-label="Remove file"
-            >
-              <XIcon className="size-3" />
-            </Button>
-          </div>
-        ) : !isProcessing ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 w-full sm:w-auto">
-            <div className="flex gap-2 flex-1 sm:flex-none">
-              <FileFormatSelector
-                fileType={file.file instanceof File ? file.file.type : file.file.type}
-                fileId={file.id}
-                sourceFile={file.file}
-                selectedFormat={selectedFormat}
-                onFormatChange={onFormatChange}
-              />
-              <FileQualitySelector
-                fileId={file.id}
-                selectedQuality={selectedQuality}
-                availableQualities={availableQualities}
-                onQualityChange={onQualityChange}
-              />
-            </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onRemove(file.id)}
-              className="size-8 text-muted-foreground hover:text-red-600 shrink-0 self-end sm:self-auto"
-              aria-label="Remove file"
-            >
-              <XIcon className="size-3" />
-            </Button>
-          </div>
-        ) : null}
+        {/* File info */}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <p className="truncate text-[13px] font-medium">
+            {file.file instanceof File ? file.file.name : file.file.name}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {formatFileSize(fileSize)}
+            {/* Show conversion result info if completed */}
+            {isCompleted && fileProgress?.convertedFileName && (
+              <>
+                {" → "}
+                <span className="text-green-600">Converted successfully</span>
+              </>
+            )}
+          </p>
+          {isImage && fileSize > 50 * 1024 * 1024 && (
+            <Badge variant="secondary" className="mt-1 w-fit text-amber-700 bg-amber-100 border-amber-200">
+              Large image: will be processed on server
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {fileProgress && <FileUploadProgress fileProgress={fileProgress} onAbort={onAbortUpload} />}
+      {/* Controls */}
+      {isCompleted && fileProgress?.downloadUrl ? (
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.open(fileProgress.downloadUrl, "_blank")}
+            className="h-8 px-3 text-xs flex-1 sm:flex-none"
+          >
+            <DownloadIcon className="mr-1 size-3" />
+            Download
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onRemove(file.id)}
+            className="size-8 text-muted-foreground hover:text-red-600 shrink-0"
+            aria-label="Remove file"
+          >
+            <XIcon className="size-3" />
+          </Button>
+        </div>
+      ) : !isProcessing && !hasError ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 w-full sm:w-auto">
+          <div className="flex gap-2 flex-1 sm:flex-none">
+            <FileFormatSelector
+              fileType={fileType}
+              fileId={file.id}
+              sourceFile={file.file}
+              selectedFormat={selectedFormat}
+              onFormatChange={onFormatChange}
+            />
+            <FileQualitySelector
+              fileId={file.id}
+              selectedQuality={selectedQuality}
+              availableQualities={availableQualities}
+              onQualityChange={onQualityChange}
+            />
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onRemove(file.id)}
+            className="size-8 text-muted-foreground hover:text-red-600 shrink-0 self-end sm:self-auto"
+            aria-label="Remove file"
+          >
+            <XIcon className="size-3" />
+          </Button>
+        </div>
+      ) : isProcessing ? (
+        <div className="flex items-center gap-2">
+          <Progress
+            value={isConverting ? fileProgress?.conversionProgress || 0 : fileProgress?.progress || 0}
+            className="w-20"
+          />
+          <span className="text-xs text-muted-foreground">
+            {Math.round(isConverting ? fileProgress?.conversionProgress || 0 : fileProgress?.progress || 0)}%
+          </span>
+          {isConverting && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-blue-600">Converting...</span>
+            </div>
+          )}
+          {isUploading && (
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 border border-green-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-green-600">Uploading...</span>
+            </div>
+          )}
+          {onAbortUpload && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onAbortUpload(file.id)}
+              className="size-6 text-muted-foreground hover:text-red-600"
+              aria-label="Cancel upload"
+            >
+              <XIcon className="size-3" />
+            </Button>
+          )}
+        </div>
+      ) : hasError ? (
+        <div className="flex items-center gap-2">
+          <AlertCircleIcon className="w-4 h-4 text-red-600" />
+          <span className="text-xs text-red-600">{fileProgress?.error}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onRemove(file.id)}
+            className="size-8 text-muted-foreground hover:text-red-600 shrink-0"
+            aria-label="Remove file"
+          >
+            <XIcon className="size-3" />
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
