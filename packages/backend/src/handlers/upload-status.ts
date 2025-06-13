@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import { getUploadStatus } from "../utils/async-s3-upload";
 import type { Variables } from "../utils/types";
-import crypto from "crypto";
 
 export async function uploadStatusHandler(
   c: Context<{ Variables: Variables }>

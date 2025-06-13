@@ -223,6 +223,49 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  async saveClientConvertedFile(
+    blob: Blob,
+    originalFileName: string,
+    originalFormat: string,
+    convertedFormat: string,
+    quality: string,
+  ) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const formData = new FormData();
+
+    // Create converted filename
+    const baseName = originalFileName.split(".").slice(0, -1).join(".");
+    const convertedFileName = `${baseName}_converted.${convertedFormat === "jpeg" ? "jpg" : convertedFormat}`;
+
+    formData.append("file", blob, convertedFileName);
+    formData.append("originalFileName", originalFileName);
+    formData.append("originalFormat", originalFormat);
+    formData.append("convertedFormat", convertedFormat);
+    formData.append("quality", quality);
+    formData.append("source", "client-side");
+
+    const headers: HeadersInit = {};
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/client-converted`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Failed to save converted file" }));
+      throw new Error(errorData.error || "Failed to save converted file");
+    }
+
+    return response.json();
+  }
 }
 
 export const apiClient = new ApiClient();

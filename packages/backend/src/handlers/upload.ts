@@ -1,11 +1,7 @@
 import type { Context } from "hono";
 import { checkConversionLimit } from "../utils/conversion";
-import {
-  uploadFile,
-  checkFileExists,
-  downloadFile,
-} from "../utils/aws-storage";
-import { queueS3Upload, getUploadStatus } from "../utils/async-s3-upload";
+import { uploadFile } from "../utils/aws-storage";
+import { queueS3Upload } from "../utils/async-s3-upload";
 import type { Variables } from "../utils/types";
 
 export async function uploadHandler(c: Context<{ Variables: Variables }>) {

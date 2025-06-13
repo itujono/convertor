@@ -10,6 +10,8 @@ import { PlanBadge } from "@/components/plan-badge";
 import { GlobalQualitySelector } from "@/components/global-quality-selector";
 import { FileList } from "@/components/file-list";
 import { PricingModal } from "@/components/pricing-modal";
+import { ClientImageConverter } from "@/components/client-image-converter";
+import { canConvertClientSide, isImageFile } from "@/hooks/use-client-image-converter";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -182,106 +184,149 @@ export default function UploadWithProgress() {
 
         {files.length > 0 && (
           <>
-            <FileList
-              files={files}
-              uploadProgress={uploadProgress}
-              selectedFormats={formatSelection.selectedFormats}
-              selectedQualities={qualitySelection.selectedQualities}
-              availableQualities={qualitySelection.getAvailableQualities()}
-              onFormatChange={formatSelection.handleFormatChange}
-              onQualityChange={qualitySelection.handleQualityChange}
-              onFileRemove={handleFileRemove}
-              onOpenFileDialog={fileUploadActions.openFileDialog}
-              onClearAll={handleClearAll}
-              onAbortUpload={abortUpload}
-            />
+            {/* Check if we have image files that can be converted client-side */}
+            {(() => {
+              const imageFiles = files.filter((file) => {
+                if (!isImageFile(file)) return false;
+                const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
+                return canConvertClientSide(file, targetFormat);
+              });
 
-            <div className="flex flex-col items-center mt-6 gap-2">
-              {areAllConversionsComplete() ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Button
-                    onClick={handleDownloadAllAsZip}
-                    size="lg"
-                    className="w-full sm:w-auto px-8"
-                    disabled={isDownloadingZip}
-                  >
-                    <DownloadIcon className="w-4 h-4 mr-2" />
-                    {isDownloadingZip ? "Preparing zip..." : "Download all as zip"}
-                  </Button>
-                  <Button
-                    onClick={() => handleClearAll()}
-                    variant="link"
-                    size="sm"
-                    className="w-full sm:w-auto px-6 mt-2"
-                  >
-                    Upload more files
-                  </Button>
-                </div>
-              ) : hasActiveOperations() ? (
-                <>
-                  <Button size="lg" className="w-full sm:w-auto px-8" disabled>
-                    Processing...
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="link" className="text-destructive">
-                        Abort all...
+              if (imageFiles.length > 0) {
+                return (
+                  <ClientImageConverter
+                    files={files}
+                    selectedFormats={formatSelection.selectedFormats}
+                    selectedQualities={qualitySelection.selectedQualities}
+                    onFormatChange={formatSelection.handleFormatChange}
+                    onQualityChange={qualitySelection.handleQualityChange}
+                    onFileRemove={handleFileRemove}
+                    onClearAll={handleClearAll}
+                    onOpenFileDialog={fileUploadActions.openFileDialog}
+                  />
+                );
+              }
+
+              // Fallback to regular server-side processing
+              return (
+                <FileList
+                  files={files}
+                  uploadProgress={uploadProgress}
+                  selectedFormats={formatSelection.selectedFormats}
+                  selectedQualities={qualitySelection.selectedQualities}
+                  availableQualities={qualitySelection.getAvailableQualities()}
+                  onFormatChange={formatSelection.handleFormatChange}
+                  onQualityChange={qualitySelection.handleQualityChange}
+                  onFileRemove={handleFileRemove}
+                  onOpenFileDialog={fileUploadActions.openFileDialog}
+                  onClearAll={handleClearAll}
+                  onAbortUpload={abortUpload}
+                />
+              );
+            })()}
+
+            {/* Only show action buttons for server-side conversion */}
+            {(() => {
+              const imageFiles = files.filter((file) => {
+                if (!isImageFile(file)) return false;
+                const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
+                return canConvertClientSide(file, targetFormat);
+              });
+
+              // If all files are client-side processable, don't show server-side buttons
+              if (imageFiles.length === files.length) {
+                return null;
+              }
+
+              return (
+                <div className="flex flex-col items-center mt-6 gap-2">
+                  {areAllConversionsComplete() ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Button
+                        onClick={handleDownloadAllAsZip}
+                        size="lg"
+                        className="w-full sm:w-auto px-8"
+                        disabled={isDownloadingZip}
+                      >
+                        <DownloadIcon className="w-4 h-4 mr-2" />
+                        {isDownloadingZip ? "Preparing zip..." : "Download all as zip"}
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-                        <div
-                          className="flex size-9 shrink-0 items-center justify-center rounded-full border"
-                          aria-hidden="true"
-                        >
-                          <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
-                        </div>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to abort all operations? This will cancel all uploads and conversions
-                            in progress.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                      </div>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleAbortAll}>Confirm</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </>
-              ) : hasFilesToConvert() ? (
-                <Button onClick={handleStartConversion} size="lg" className="w-full sm:w-auto px-8">
-                  Start converting now{" "}
-                  <span role="img" aria-label="Lightning">
-                    ⚡️
-                  </span>
-                </Button>
-              ) : hasAnyCompletedFiles() ? (
-                <div className="flex flex-col items-center gap-2">
-                  {getConvertedFilePaths().length > 0 && (
-                    <Button
-                      onClick={handleDownloadAllAsZip}
-                      size="lg"
-                      className="w-full sm:w-auto px-8"
-                      disabled={isDownloadingZip}
-                    >
-                      <DownloadIcon className="w-4 h-4 mr-2" />
-                      {isDownloadingZip ? "Preparing zip..." : "Download converted files"}
+                      <Button
+                        onClick={() => handleClearAll()}
+                        variant="link"
+                        size="sm"
+                        className="w-full sm:w-auto px-6 mt-2"
+                      >
+                        Upload more files
+                      </Button>
+                    </div>
+                  ) : hasActiveOperations() ? (
+                    <>
+                      <Button size="lg" className="w-full sm:w-auto px-8" disabled>
+                        Processing...
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="link" className="text-destructive">
+                            Abort all...
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
+                            <div
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full border"
+                              aria-hidden="true"
+                            >
+                              <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
+                            </div>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to abort all operations? This will cancel all uploads and
+                                conversions in progress.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                          </div>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleAbortAll}>Confirm</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  ) : hasFilesToConvert() ? (
+                    <Button onClick={handleStartConversion} size="lg" className="w-full sm:w-auto px-8">
+                      Start converting now{" "}
+                      <span role="img" aria-label="Lightning">
+                        ⚡️
+                      </span>
                     </Button>
-                  )}
-                  <Button
-                    onClick={() => handleClearAll()}
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto px-6 mt-2"
-                  >
-                    Upload more files
-                  </Button>
+                  ) : hasAnyCompletedFiles() ? (
+                    <div className="flex flex-col items-center gap-2">
+                      {getConvertedFilePaths().length > 0 && (
+                        <Button
+                          onClick={handleDownloadAllAsZip}
+                          size="lg"
+                          className="w-full sm:w-auto px-8"
+                          disabled={isDownloadingZip}
+                        >
+                          <DownloadIcon className="w-4 h-4 mr-2" />
+                          {isDownloadingZip ? "Preparing zip..." : "Download converted files"}
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => handleClearAll()}
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto px-6 mt-2"
+                      >
+                        Upload more files
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+              );
+            })()}
           </>
         )}
       </div>

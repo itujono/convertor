@@ -1,3 +1,5 @@
+import { AppSettings } from "../../../frontend/src/lib/app-settings";
+
 export interface ConversionLimitError {
   type: "daily_limit_reached" | "insufficient_conversions";
   message: string;
@@ -40,7 +42,11 @@ export const calculateRemainingConversions = (
   conversionCount: number,
   lastReset: Date | string
 ): number => {
-  const dailyLimit = plan === "free" ? 10 : 100;
+  const { plans } = AppSettings;
+  const dailyLimit =
+    plan === "free"
+      ? plans.free.quotas.conversionsPerDay
+      : plans.premium.quotas.conversionsPerDay;
 
   // If it's a new day, user gets fresh quota
   if (checkDailyReset(lastReset)) {

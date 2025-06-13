@@ -14,9 +14,11 @@ import {
   TriangleAlert,
   CircleAlertIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,46 @@ import {
 import { apiClient, type UserFile, type UserFilesResponse } from "@/lib/api-client";
 import { formatBytes } from "@/hooks/use-file-upload";
 import { useAuth } from "@/lib/auth-context";
+
+// Helper component for image preview with dialog
+function ImagePreview({ file }: { file: UserFile }) {
+  const isImage = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
+    file.converted_format.toLowerCase(),
+  );
+
+  if (!isImage || !file.download_url) {
+    const FileIcon = getIconForFormat(file.converted_format);
+    return <FileIcon className="size-4 text-muted-foreground" />;
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild className="cursor-pointer">
+        <Image
+          width={40}
+          height={40}
+          src={file.download_url}
+          alt={file.original_file_name}
+          className="size-full object-cover rounded"
+          unoptimized // Since these are S3 URLs, disable Next.js optimization
+        />
+      </DialogTrigger>
+      <DialogContent className="max-w-screen-md p-0 pt-8">
+        <DialogHeader>
+          <DialogTitle className="sr-only">{file.original_file_name}</DialogTitle>
+        </DialogHeader>
+        <Image
+          width={800}
+          height={600}
+          src={file.download_url}
+          alt={file.original_file_name}
+          className="w-full h-auto object-contain max-h-[80vh]"
+          unoptimized
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const getIconForFormat = (format: string) => {
   const lowerFormat = format.toLowerCase();
@@ -281,7 +323,6 @@ export function ReadyDownloads() {
         <div className="space-y-3">
           {userFiles.map((file) => {
             const expirationStatus = getExpirationStatus(file.time_remaining);
-            const FileIcon = getIconForFormat(file.converted_format);
 
             return (
               <div
@@ -289,8 +330,8 @@ export function ReadyDownloads() {
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg"
               >
                 <div className="flex gap-3 flex-1 min-w-0">
-                  <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded border">
-                    <FileIcon className="size-4 text-muted-foreground" />
+                  <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded border overflow-hidden">
+                    <ImagePreview file={file} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 mb-1">
