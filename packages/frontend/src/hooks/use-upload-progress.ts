@@ -35,13 +35,11 @@ const uploadFile = async (
   const maxRetries = 3;
 
   try {
-    // Check if we're online before starting
     if (!navigator.onLine) {
       onError("No internet connection. Please check your connection and try again.");
       return;
     }
 
-    // Simulate upload progress (since we can't track real FormData upload progress easily)
     let progress = 0;
     const progressInterval = setInterval(() => {
       if (abortSignal?.aborted) {
@@ -58,7 +56,6 @@ const uploadFile = async (
     const timeoutId = setTimeout(() => {
       clearInterval(progressInterval);
 
-      // If we have retries left and it's a timeout, try again
       if (retryCount < maxRetries) {
         toast.warning(`Upload timeout, retrying... (${retryCount + 1}/${maxRetries})`, {
           description: `Retrying upload for ${file.name}`,
@@ -79,12 +76,9 @@ const uploadFile = async (
       clearInterval(progressInterval);
       onProgress(100);
 
-      // Handle both sync (filePath) and async (uploadId) responses
       if (response.filePath) {
-        // Synchronous upload completed
         onComplete(response.filePath);
       } else if (response.uploadId) {
-        // Asynchronous upload started - pass the uploadId
         onComplete("", response.uploadId);
       } else {
         throw new Error("Invalid upload response - missing filePath and uploadId");
@@ -93,7 +87,6 @@ const uploadFile = async (
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
 
-      // Check if upload was cancelled by user
       if (error instanceof Error && error.message.includes("cancelled by user")) {
         toast.info("Upload cancelled", {
           description: `Upload of ${file.name} was cancelled`,
@@ -102,7 +95,6 @@ const uploadFile = async (
         return;
       }
 
-      // Check if it's a network error and we have retries left
       const isNetworkError =
         error instanceof Error &&
         (error.message.includes("fetch") ||
@@ -135,8 +127,8 @@ const uploadFile = async (
 };
 
 const convertFile = async (
-  fileIdentifier: string, // Either filePath or uploadId
-  uploadId: string | undefined, // If provided, this is an async upload
+  fileIdentifier: string,
+  uploadId: string | undefined,
   format: string,
   quality: string,
   onComplete: (downloadUrl: string, outputPath: string, fileName?: string, fileSize?: number) => void,
@@ -151,11 +143,9 @@ const convertFile = async (
 
     let actualFilePath = fileIdentifier;
 
-    // If we have an uploadId, we need to wait for async upload to complete first
     if (uploadId) {
-      onProgress(10); // Start with some progress
+      onProgress(10);
 
-      // Poll upload status until complete
       while (true) {
         if (abortSignal?.aborted) return;
 
@@ -163,14 +153,13 @@ const convertFile = async (
           const statusResponse = await apiClient.checkUploadStatus(uploadId);
 
           if (statusResponse.status === "completed") {
-            onProgress(50); // Upload complete, starting conversion
+            onProgress(50);
             actualFilePath = statusResponse.filePath || fileIdentifier;
             break;
           } else if (statusResponse.status === "failed") {
             throw new Error(statusResponse.error || "Upload failed");
           }
 
-          // Still uploading, wait a bit
           await new Promise((resolve) => setTimeout(resolve, 2000));
         } catch (error) {
           throw new Error(
@@ -205,12 +194,9 @@ const convertFile = async (
             }
           }
         }
-      } catch (error) {
-        // Ignore progress polling errors to avoid spam
-      }
+      } catch (error) {}
     }, 1000);
 
-    // Call the appropriate conversion method
     const response = uploadId
       ? await apiClient.convertFileWithUploadId(uploadId, format, quality)
       : await apiClient.convertFile(fileIdentifier, format, quality);
@@ -315,11 +301,10 @@ export function useUploadProgress() {
           const targetFormat = selectedFormats[file.id];
           const targetQuality = selectedQualities[file.id] || "medium";
           if (targetFormat) {
-            // Add a small delay before starting conversion to allow S3 consistency
             setTimeout(() => {
               convertFile(
-                filePath || uploadId || "", // Use filePath if available, otherwise uploadId
-                uploadId, // Pass uploadId separately
+                filePath || uploadId || "",
+                uploadId,
                 targetFormat,
                 targetQuality,
                 (downloadUrl, outputPath, fileName, fileSize) => {
@@ -342,9 +327,12 @@ export function useUploadProgress() {
                     ),
                   );
 
-                  // Show success toast for conversion
                   toast.success("Conversion complete! 🎉", {
                     description: `${fileName || "Your file"} is ready for download`,
+                  });
+
+                  refreshUser().catch((error) => {
+                    console.warn("Failed to refresh user data after conversion:", error);
                   });
                 },
                 (error) => {
@@ -376,7 +364,6 @@ export function useUploadProgress() {
     const controller = abortControllers.get(fileId);
     const progressItem = uploadProgress.find((item) => item.fileId === fileId);
 
-    // Abort frontend operation
     if (controller) {
       controller.abort();
       const newControllers = new Map(abortControllers);
@@ -384,17 +371,14 @@ export function useUploadProgress() {
       setAbortControllers(newControllers);
     }
 
-    // Update UI immediately
     setUploadProgress((prev) => prev.map((item) => (item.fileId === fileId ? { ...item, aborted: true } : item)));
 
     if (progressItem) {
       try {
-        // If it's an async upload, abort it server-side
         if (!progressItem.completed && !progressItem.error) {
           await abortClient.abortUpload(fileId);
         }
 
-        // If there are files to clean up
         const filesToDelete: string[] = [];
         if (progressItem.convertedFilePath) {
           filesToDelete.push(progressItem.convertedFilePath);
@@ -406,7 +390,6 @@ export function useUploadProgress() {
         }
       } catch (error) {
         console.warn(`⚠️ Server-side cleanup failed for ${fileId}:`, error);
-        // Don't throw - the UI abort was successful
       }
     }
   };
@@ -426,9 +409,7 @@ export function useUploadProgress() {
     const filePaths: string[] = [];
 
     uploadProgress.forEach((progress) => {
-      // If there's an active upload or conversion, we need to abort it server-side
       if (!progress.completed && !progress.aborted && !progress.error) {
-        // This is likely an async upload with uploadId
         const uploadId = progress.fileId; // In some cases, fileId might be the uploadId
         if (uploadId) {
           uploadIds.push(uploadId);

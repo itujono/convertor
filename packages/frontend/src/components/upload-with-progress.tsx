@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const { isOnline } = useOnlineDetector();
+  const { refreshUser } = useAuth();
 
   const {
     uploadProgress,
@@ -191,32 +193,10 @@ export default function UploadWithProgress() {
     try {
       setIsDownloadingZip(true);
 
-      // Handle client-side downloads first (individual downloads)
       const clientSideConversions = clientConversions.filter((c) => c.completed && c.result);
-      if (clientSideConversions.length > 0) {
-        // Download client-side files individually since they can't be zipped server-side
-        for (const conversion of clientSideConversions) {
-          if (conversion.result) {
-            const { downloadUrl, fileName } = conversion.result;
-            const a = document.createElement("a");
-            a.href = downloadUrl;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay between downloads
-          }
-        }
-      }
-
-      // Handle server-side zip download
       const convertedFilePaths = getConvertedFilePaths();
-      if (convertedFilePaths.length > 0) {
-        console.log("Downloading zip with paths:", convertedFilePaths);
-        await apiClient.downloadZip(convertedFilePaths);
-      }
-
       const totalFiles = clientSideConversions.length + convertedFilePaths.length;
+
       if (totalFiles === 0) {
         toast.error("No files to download", {
           description: "No converted files are available for download.",
@@ -224,11 +204,73 @@ export default function UploadWithProgress() {
         return;
       }
 
-      toast.success("Download started", {
-        description: `Downloading ${totalFiles} file${totalFiles > 1 ? "s" : ""}${
-          convertedFilePaths.length > 0 ? " (some as ZIP)" : ""
-        }`,
-      });
+      // If we have both client-side and server-side files, or multiple client-side files, create a ZIP
+      if (totalFiles > 1 || (clientSideConversions.length > 0 && convertedFilePaths.length > 0)) {
+        const JSZip = (await import("jszip")).default;
+        const zip = new JSZip();
+
+        for (const conversion of clientSideConversions) {
+          if (conversion.result) {
+            const response = await fetch(conversion.result.downloadUrl);
+            const blob = await response.blob();
+            zip.file(conversion.result.fileName, blob);
+          }
+        }
+
+        // Add server-side files to ZIP if any
+        if (convertedFilePaths.length > 0) {
+          // For server-side files, we need to fetch them and add to ZIP
+          for (const filePath of convertedFilePaths) {
+            try {
+              const response = await fetch(`/api/download/${encodeURIComponent(filePath)}`);
+              if (response.ok) {
+                const blob = await response.blob();
+                const fileName = filePath.split("/").pop() || "converted-file";
+                zip.file(fileName, blob);
+              }
+            } catch (error) {
+              console.warn(`Failed to add ${filePath} to ZIP:`, error);
+            }
+          }
+        }
+
+        // Generate and download ZIP file
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `converted-files-${new Date().getTime()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast.success("ZIP download started", {
+          description: `Downloading ${totalFiles} file${totalFiles > 1 ? "s" : ""} as ZIP`,
+        });
+      } else if (clientSideConversions.length === 1 && convertedFilePaths.length === 0) {
+        const conversion = clientSideConversions[0];
+        if (conversion.result) {
+          const { downloadUrl, fileName } = conversion.result;
+          const a = document.createElement("a");
+          a.href = downloadUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+
+        toast.success("Download started", {
+          description: "Downloading converted file",
+        });
+      } else if (convertedFilePaths.length === 1 && clientSideConversions.length === 0) {
+        console.log("Downloading single server file:", convertedFilePaths[0]);
+        await apiClient.downloadZip(convertedFilePaths);
+
+        toast.success("Download started", {
+          description: "Downloading converted file",
+        });
+      }
     } catch (error) {
       console.error("Failed to download files:", error);
       toast.error("Download failed", {
@@ -241,7 +283,7 @@ export default function UploadWithProgress() {
 
   const handleAbortAll = async () => {
     await clearProgress();
-    clearConversions(); // Clear client-side conversions
+    clearConversions();
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();

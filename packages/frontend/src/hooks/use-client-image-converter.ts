@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 export interface ClientConversionOptions {
@@ -210,6 +211,7 @@ async function convertImageClientSide(
 
 export function useClientImageConverter() {
   const [conversions, setConversions] = useState<ClientConversionProgress[]>([]);
+  const { refreshUser } = useAuth();
 
   const convertFiles = useCallback(
     async (
@@ -248,11 +250,16 @@ export function useClientImageConverter() {
 
       setConversions((prev) => [...prev.filter((c) => !imageFiles.some((f) => f.id === c.fileId)), ...initialProgress]);
 
-      // Convert each file
+      // Process files sequentially to avoid overwhelming the browser
       for (const file of imageFiles) {
         try {
           const targetFormat = selectedFormats[file.id] || "jpeg";
           const quality = selectedQualities[file.id] || "medium";
+
+          // Update progress to show conversion starting
+          setConversions((prev) =>
+            prev.map((c) => (c.fileId === file.id ? { ...c, progress: 10, converting: true } : c)),
+          );
 
           if (!canConvertClientSide(file, targetFormat)) {
             // Skip client-side conversion for this file
@@ -323,13 +330,11 @@ export function useClientImageConverter() {
                 quality,
               );
 
-              // Mark as saved to server
               setConversions((prev) =>
                 prev.map((c) => (c.fileId === file.id ? { ...c, saving: false, savedToServer: true } : c)),
               );
             } catch (saveError) {
               console.error("Background save to server failed:", saveError);
-              // Mark save failed but keep local result available
               setConversions((prev) =>
                 prev.map((c) =>
                   c.fileId === file.id
@@ -345,14 +350,16 @@ export function useClientImageConverter() {
             }
           };
 
-          // Start background save without blocking the UI
           saveToServer();
         } catch (error) {
+          console.error(`Conversion failed for ${file.file.name}:`, error);
           setConversions((prev) =>
             prev.map((c) =>
               c.fileId === file.id
                 ? {
                     ...c,
+                    progress: 0,
+                    completed: false,
                     converting: false,
                     error: error instanceof Error ? error.message : "Conversion failed",
                   }
@@ -361,8 +368,14 @@ export function useClientImageConverter() {
           );
         }
       }
+
+      try {
+        await refreshUser();
+      } catch (error) {
+        console.warn("Failed to refresh user data after conversions:", error);
+      }
     },
-    [],
+    [refreshUser],
   );
 
   const downloadFile = useCallback(
