@@ -5,6 +5,7 @@ import UploadSection from "./upload-section";
 import Hero from "./hero";
 import { Suspense } from "react";
 import { AppSettings } from "@/lib/app-settings";
+import Script from "next/script";
 // import UploadSectionSkeleton from "./upload-section-skeleton";
 
 export const dynamic = "force-dynamic";
@@ -15,14 +16,40 @@ const structuredData = {
   name: "File Converter",
   description:
     "Free online file converter supporting 50+ formats. Convert images, videos, audio files and documents instantly.",
-  url: process.env.NEXT_PUBLIC_APP_URL || AppSettings.url,
+  url: AppSettings.url,
   applicationCategory: "UtilitiesApplication",
   operatingSystem: "Web Browser",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-  },
+  offers: [
+    {
+      "@type": "Offer",
+      name: "Free Tier",
+      description: "Basic file conversion with standard features",
+      price: "0",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+      validFrom: new Date().toISOString(),
+      priceSpecification: {
+        "@type": "PriceSpecification",
+        price: "0",
+        priceCurrency: "USD",
+      },
+    },
+    {
+      "@type": "Offer",
+      name: "Premium Tier",
+      description: "Advanced file conversion with premium features, higher limits, and priority processing",
+      price: "5.99",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+      validFrom: new Date().toISOString(),
+      priceSpecification: {
+        "@type": "PriceSpecification",
+        price: "5.99",
+        priceCurrency: "USD",
+        billingDuration: "P1M",
+      },
+    },
+  ],
   featureList: [
     "Image format conversion (JPG, PNG, WebP, GIF, SVG, BMP, TIFF)",
     "Video format conversion (MP4, AVI, MOV, MKV, WebM, FLV)",
@@ -37,14 +64,19 @@ const structuredData = {
   provider: {
     "@type": "Organization",
     name: AppSettings.name,
-    url: process.env.NEXT_PUBLIC_APP_URL || AppSettings.url,
+    url: AppSettings.url,
   },
 };
 
 export default function Home() {
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+      <Script
+        id="structured-data"
+        type="application/ld+json"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <div className="min-h-screen bg-background dark:from-slate-900 dark:to-slate-800">
         <Navbar />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:pb-20 space-y-20">

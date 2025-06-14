@@ -2,7 +2,7 @@ import { AppSettings } from "@/lib/app-settings";
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || AppSettings.url;
+  const baseUrl = AppSettings.url;
 
   return [
     {
