@@ -370,7 +370,16 @@ export function useClientImageConverter() {
       }
 
       try {
-        await refreshUser();
+        console.log("🔄 Refreshing user data after client-side conversions...");
+        // Add a small delay to ensure backend database update is committed
+        setTimeout(async () => {
+          try {
+            await refreshUser();
+            console.log("✅ User data refreshed successfully after client-side conversions");
+          } catch (error) {
+            console.error("❌ Failed to refresh user data after client-side conversions:", error);
+          }
+        }, 500); // 500ms delay
       } catch (error) {
         console.warn("Failed to refresh user data after conversions:", error);
       }
@@ -432,8 +441,8 @@ export function useClientImageConverter() {
   );
 
   const hasActiveConversions = conversions.some((c) => c.converting);
-  const hasCompletedConversions = conversions.some((c) => c.completed);
-  const areAllConversionsComplete = conversions.length > 0 && conversions.every((c) => c.completed || c.error);
+  const hasCompletedConversions = conversions.some((c) => c.completed && !c.error);
+  const areAllConversionsComplete = conversions.length > 0 && conversions.every((c) => c.completed && !c.error);
 
   return {
     conversions,

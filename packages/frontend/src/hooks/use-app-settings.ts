@@ -66,6 +66,9 @@ export interface AppSettingsContext {
 export function useAppSettings(): AppSettingsContext {
   const { user: authUser, session } = useAuth();
 
+  // Create a cache-busting key that changes when user data changes
+  const userDataKey = authUser ? `${authUser.id}-${authUser.conversionCount}-${authUser.lastReset}` : "no-user";
+
   const user: User | null = useMemo(
     () =>
       authUser
@@ -148,16 +151,19 @@ export function useAppSettings(): AppSettingsContext {
     };
 
     const canConvertMore = () => {
-      if (!user?.usage) return true;
+      if (!authUser) return true;
+
+      const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
+      const conversionsThisMonth = authUser.conversionCount || 0; // TODO: Implement monthly tracking separately
 
       return (
-        user.usage.conversionsToday < planLimits.quotas.conversionsPerDay &&
-        user.usage.conversionsThisMonth < planLimits.quotas.conversionsPerMonth
+        conversionsToday < planLimits.quotas.conversionsPerDay &&
+        conversionsThisMonth < planLimits.quotas.conversionsPerMonth
       );
     };
 
     const getRemainingConversions = () => {
-      if (!user?.usage || !authUser) {
+      if (!authUser) {
         return {
           daily: planLimits.quotas.conversionsPerDay,
           monthly: planLimits.quotas.conversionsPerMonth,
@@ -171,21 +177,36 @@ export function useAppSettings(): AppSettingsContext {
         authUser.lastReset,
       );
 
+      // Calculate monthly remaining (for now, same as daily since we don't track monthly separately)
+      const monthlyRemaining = Math.max(0, planLimits.quotas.conversionsPerMonth - (authUser.conversionCount || 0));
+
+      console.log("📊 Usage calculation:", {
+        authUserConversionCount: authUser.conversionCount,
+        dailyLimit: planLimits.quotas.conversionsPerDay,
+        monthlyLimit: planLimits.quotas.conversionsPerMonth,
+        dailyRemaining,
+        monthlyRemaining,
+        lastReset: authUser.lastReset,
+      });
+
       return {
         daily: dailyRemaining,
-        monthly: Math.max(0, planLimits.quotas.conversionsPerMonth - user.usage.conversionsThisMonth),
+        monthly: monthlyRemaining,
       };
     };
 
     const getUsagePercentage = () => {
-      if (!user?.usage) {
+      if (!authUser) {
         return { daily: 0, monthly: 0, storage: 0 };
       }
 
+      const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
+      const conversionsThisMonth = authUser.conversionCount || 0; // TODO: Implement monthly tracking separately
+
       return {
-        daily: Math.min(100, (user.usage.conversionsToday / planLimits.quotas.conversionsPerDay) * 100),
-        monthly: Math.min(100, (user.usage.conversionsThisMonth / planLimits.quotas.conversionsPerMonth) * 100),
-        storage: Math.min(100, (user.usage.storageUsedGB / planLimits.quotas.storageGB) * 100),
+        daily: Math.min(100, (conversionsToday / planLimits.quotas.conversionsPerDay) * 100),
+        monthly: Math.min(100, (conversionsThisMonth / planLimits.quotas.conversionsPerMonth) * 100),
+        storage: 0, // TODO: Implement storage tracking
       };
     };
 
@@ -218,7 +239,7 @@ export function useAppSettings(): AppSettingsContext {
 
       settings: AppSettings,
     };
-  }, [user, userPlan, planLimits, isAuthenticated, authUser]);
+  }, [user, userPlan, planLimits, isAuthenticated, authUser, userDataKey]);
 
   return context;
 }

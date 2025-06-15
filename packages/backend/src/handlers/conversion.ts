@@ -513,6 +513,41 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         "📁 Non-SVG file detected, starting standard FFmpeg conversion"
       );
 
+      // For video files, let's probe the file first to get metadata
+      if (getFileTypeCategory(format) === "video") {
+        console.log("🔍 Probing video file for metadata...");
+        try {
+          await new Promise((resolve, reject) => {
+            ffmpeg.ffprobe(tempInputPath, (err: any, metadata: any) => {
+              if (err) {
+                console.error("❌ FFprobe error:", err);
+                reject(err);
+              } else {
+                console.log("📊 Video metadata:", {
+                  duration: metadata.format?.duration,
+                  size: metadata.format?.size,
+                  bitRate: metadata.format?.bit_rate,
+                  formatName: metadata.format?.format_name,
+                  streams: metadata.streams?.length,
+                  videoStream: metadata.streams?.find(
+                    (s: any) => s.codec_type === "video"
+                  ),
+                  audioStream: metadata.streams?.find(
+                    (s: any) => s.codec_type === "audio"
+                  ),
+                });
+                resolve(metadata);
+              }
+            });
+          });
+        } catch (probeError) {
+          console.error(
+            "⚠️ Video probe failed, continuing anyway:",
+            probeError
+          );
+        }
+      }
+
       console.log("🔄 Starting conversion...");
       console.log("📋 Pre-conversion details:", {
         tempInputPath,
@@ -528,12 +563,31 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         command = applyQualitySettings(command, format, quality);
         console.log("⚙️ Quality settings applied");
 
+        const fileType = getFileTypeCategory(format);
+        if (fileType === "video") {
+          console.log("🎥 Adding video-specific options...");
+
+          command = command.format(format);
+
+          if (format.toLowerCase() === "mp4") {
+            command = command.outputOptions([
+              "-movflags",
+              "+faststart",
+              "-pix_fmt",
+              "yuv420p",
+            ]);
+            console.log("🎥 Added MP4-specific options");
+          } else if (format.toLowerCase() === "webm") {
+            command = command.outputOptions(["-pix_fmt", "yuv420p"]);
+            console.log("🎥 Added WebM-specific options");
+          }
+        }
+
         const smartTimeout = calculateSmartTimeout(
           fileBuffer.length,
           format,
           quality
         );
-        const fileType = getFileTypeCategory(format);
         const conversionTimeout = setTimeout(() => {
           const timeoutMessage = getTimeoutMessage(smartTimeout, fileType);
           console.error(`❌ FFmpeg conversion timeout: ${timeoutMessage}`);
@@ -541,6 +595,17 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         }, smartTimeout);
 
         console.log("🎬 About to run FFmpeg command...");
+        console.log("💾 Memory usage before FFmpeg:", {
+          heapUsed:
+            Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
+          heapTotal:
+            Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + "MB",
+          external:
+            Math.round(process.memoryUsage().external / 1024 / 1024) + "MB",
+        });
+
+        let progressReported = false;
+        let lastProgressTime = Date.now();
 
         command
           .on("start", (commandLine: string) => {
@@ -549,14 +614,29 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
             console.log("📋 Output file:", tempOutputPath);
             console.log("📋 Format:", format);
             console.log("📋 Quality:", quality);
+            console.log("⏰ Conversion started at:", new Date().toISOString());
             conversionProgress.set(progressKey, {
               progress: 0,
               status: "converting",
             });
           })
           .on("progress", (progress: any) => {
+            const now = Date.now();
+            const timeSinceLastProgress = now - lastProgressTime;
+            lastProgressTime = now;
+
             const percent = Math.round(progress.percent || 0);
-            console.log("📊 FFmpeg progress:", percent + "% done");
+            progressReported = true;
+
+            console.log("📊 FFmpeg progress:", {
+              percent: percent + "%",
+              timemark: progress.timemark,
+              currentFps: progress.currentFps,
+              currentKbps: progress.currentKbps,
+              targetSize: progress.targetSize,
+              timeSinceLastUpdate: timeSinceLastProgress + "ms",
+            });
+
             conversionProgress.set(progressKey, {
               progress: percent,
               status: "converting",
@@ -564,6 +644,16 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
           })
           .on("end", () => {
             console.log("✅ FFmpeg conversion completed successfully");
+            console.log("⏰ Conversion ended at:", new Date().toISOString());
+            console.log("💾 Memory usage after FFmpeg:", {
+              heapUsed:
+                Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
+              heapTotal:
+                Math.round(process.memoryUsage().heapTotal / 1024 / 1024) +
+                "MB",
+              external:
+                Math.round(process.memoryUsage().external / 1024 / 1024) + "MB",
+            });
             conversionProgress.set(progressKey, {
               progress: 100,
               status: "uploading",
@@ -578,6 +668,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
               stack: err.stack,
               code: err.code,
               signal: err.signal,
+              progressWasReported: progressReported,
             });
             conversionProgress.set(progressKey, {
               progress: 0,
@@ -592,6 +683,18 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         try {
           command.run();
           console.log("✅ FFmpeg .run() called successfully");
+
+          // Add a progress check timeout - if no progress is reported within 30 seconds, something is wrong
+          setTimeout(() => {
+            if (!progressReported) {
+              console.error(
+                "⚠️ No progress reported within 30 seconds - FFmpeg might be stuck"
+              );
+              console.error(
+                "�� Checking if FFmpeg process is still running..."
+              );
+            }
+          }, 30000);
         } catch (runError) {
           console.error("❌ Error calling FFmpeg .run():", runError);
           throw runError;
@@ -742,6 +845,11 @@ function applyQualitySettings(
   });
 
   if (isImage) {
+    const options = [
+      "-q:v",
+      quality === "low" ? "8" : quality === "high" ? "2" : "5",
+    ];
+    console.log("🖼️ Image quality options:", options);
     switch (quality) {
       case "low":
         return command.outputOptions(["-q:v", "8"]);
@@ -754,18 +862,28 @@ function applyQualitySettings(
     console.log("🎥 Applying video quality settings...");
 
     // Simplified video settings - let FFmpeg choose codecs automatically
+    let options: string[];
     switch (quality) {
       case "low":
         console.log("🎥 Using low quality settings");
-        return command.outputOptions(["-crf", "35", "-preset", "ultrafast"]);
+        options = ["-crf", "35", "-preset", "ultrafast"];
+        console.log("🎥 Low quality options:", options);
+        return command.outputOptions(options);
       case "high":
         console.log("🎥 Using high quality settings");
-        return command.outputOptions(["-crf", "18", "-preset", "fast"]);
+        options = ["-crf", "18", "-preset", "fast"];
+        console.log("🎥 High quality options:", options);
+        return command.outputOptions(options);
       default: // medium
         console.log("🎥 Using medium quality settings");
-        return command.outputOptions(["-crf", "23", "-preset", "fast"]);
+        options = ["-crf", "23", "-preset", "fast"];
+        console.log("🎥 Medium quality options:", options);
+        return command.outputOptions(options);
     }
   } else if (isAudio) {
+    const bitrate =
+      quality === "low" ? "128k" : quality === "high" ? "320k" : "192k";
+    console.log("🎵 Audio quality bitrate:", bitrate);
     switch (quality) {
       case "low":
         return command.audioBitrate("128k");
@@ -776,5 +894,6 @@ function applyQualitySettings(
     }
   }
 
+  console.log("❓ No specific quality settings applied for format:", format);
   return command; // No specific quality settings for other formats
 }

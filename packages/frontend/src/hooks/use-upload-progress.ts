@@ -183,20 +183,33 @@ const convertFile = async (
           const encodedFilePath = encodeURIComponent(actualFilePath);
           const progressUrl = `${API_BASE_URL}/api/convert/progress/${encodedFilePath}`;
 
+          console.log("🔍 Polling conversion progress:", {
+            actualFilePath,
+            encodedFilePath,
+            progressUrl,
+          });
+
           const response = await fetch(progressUrl, {
             headers: await getAuthHeaders(),
           });
 
           if (response.ok) {
             const progressData = await response.json();
+            console.log("📊 Progress data received:", progressData);
+
             if (progressData.progress !== undefined) {
               // For async uploads, start progress from 50% (upload complete)
               const adjustedProgress = uploadId ? 50 + progressData.progress * 0.5 : progressData.progress;
+              console.log("📈 Updating progress:", adjustedProgress);
               onProgress(adjustedProgress);
             }
+          } else {
+            console.log("⚠️ Progress request failed:", response.status, response.statusText);
           }
         }
-      } catch (error) {}
+      } catch (error) {
+        console.error("❌ Progress polling error:", error);
+      }
     }, 1000);
 
     const response = uploadId
@@ -334,9 +347,17 @@ export function useUploadProgress() {
                     description: `${fileName || "Your file"} is ready for download`,
                   });
 
-                  refreshUser().catch((error) => {
-                    console.warn("Failed to refresh user data after conversion:", error);
-                  });
+                  console.log("🔄 Refreshing user data after successful conversion...");
+                  // Add a small delay to ensure backend database update is committed
+                  setTimeout(() => {
+                    refreshUser()
+                      .then(() => {
+                        console.log("✅ User data refreshed successfully after conversion");
+                      })
+                      .catch((error) => {
+                        console.error("❌ Failed to refresh user data after conversion:", error);
+                      });
+                  }, 500); // 500ms delay
                 },
                 (error) => {
                   setUploadProgress((prev) =>
@@ -485,7 +506,7 @@ export function useUploadProgress() {
   };
 
   const hasAnyCompletedFiles = () => {
-    return uploadProgress.some((p) => p.converted || p.error);
+    return uploadProgress.some((p) => p.converted && !p.error);
   };
 
   return {

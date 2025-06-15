@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 export function useOnlineDetector() {
   const [isOnline, setIsOnline] = useState(true);
   const [wasOffline, setWasOffline] = useState(false);
-  const [lastCheckTime, setLastCheckTime] = useState(0);
+  const lastCheckTimeRef = useRef(0);
 
   const testConnectivity = useCallback(async (): Promise<boolean> => {
     try {
@@ -46,12 +46,12 @@ export function useOnlineDetector() {
       const now = Date.now();
 
       // Debounce: Don't check more than once every 10 seconds unless forced
-      if (!force && now - lastCheckTime < 10000) {
+      if (!force && now - lastCheckTimeRef.current < 10000) {
         console.log("🔄 Skipping connectivity check (debounced)");
         return;
       }
 
-      setLastCheckTime(now);
+      lastCheckTimeRef.current = now;
       console.log("🌐 Checking connectivity...");
 
       const hasConnectivity = await testConnectivity();
@@ -73,7 +73,7 @@ export function useOnlineDetector() {
         }
       }
     },
-    [isOnline, wasOffline, testConnectivity, lastCheckTime],
+    [isOnline, wasOffline, testConnectivity],
   );
 
   useEffect(() => {

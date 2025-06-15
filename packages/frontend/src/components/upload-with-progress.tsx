@@ -112,16 +112,18 @@ export default function UploadWithProgress() {
 
     if (allFileIds.length === 0) return false;
 
-    // Check each file to see if it's converted either client-side or server-side
+    // Check each file to see if it's successfully converted either client-side or server-side
     const allConverted = allFileIds.every((fileId) => {
       const clientConversion = clientConversions.find((c) => c.fileId === fileId);
-      if (clientConversion && (clientConversion.completed || clientConversion.error)) {
-        return true;
+      if (clientConversion) {
+        // Only count as complete if successfully completed, not if there's an error
+        return clientConversion.completed && !clientConversion.error;
       }
 
       const serverConversion = uploadProgress.find((p) => p.fileId === fileId);
-      if (serverConversion && (serverConversion.converted || serverConversion.error)) {
-        return true;
+      if (serverConversion) {
+        // Only count as complete if successfully converted, not if there's an error
+        return serverConversion.converted && !serverConversion.error;
       }
 
       return false;
@@ -305,7 +307,7 @@ export default function UploadWithProgress() {
                   No internet connection. Uploads and conversions are paused.
                 </span>
               </div>
-              <Button variant="outline" size="sm" onClick={checkConnectivity} className="text-xs h-7 px-2">
+              <Button variant="outline" size="sm" onClick={() => checkConnectivity(true)} className="text-xs h-7 px-2">
                 Check Again
               </Button>
             </div>
