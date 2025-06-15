@@ -39,7 +39,6 @@ import type { Variables } from "./utils/types";
 
 const app = new Hono<{ Variables: Variables }>();
 
-// Add startup dependency checks
 console.log("🔍 Checking dependencies...");
 try {
   const awsS3 = await import("@aws-sdk/client-s3");
@@ -56,9 +55,7 @@ try {
 }
 
 app.use("*", async (c, next) => {
-  // Set a longer timeout for upload and conversion endpoints
   if (c.req.path.includes("/upload") || c.req.path.includes("/convert")) {
-    // 10 minute timeout for large files
     const timeoutId = setTimeout(() => {
       console.log("Request timeout for:", c.req.path);
     }, 10 * 60 * 1000);
@@ -83,7 +80,6 @@ app.use(
         ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
       ];
 
-      // Add debugging for OPTIONS requests
       if (c.req.method === "OPTIONS") {
         const headersObj: Record<string, string> = {};
         c.req.raw.headers.forEach((value, key) => {
@@ -100,18 +96,16 @@ app.use(
         });
       }
 
-      // Handle cases where origin is not provided (same-origin requests)
       if (!origin) {
         return "*";
       }
 
-      // Check if origin is in allowed list
       if (allowedOrigins.includes(origin)) {
         return origin;
       }
 
       console.log("❌ CORS: Origin not allowed:", origin);
-      return null; // Return null for disallowed origins
+      return null;
     },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -119,7 +113,7 @@ app.use(
   })
 );
 
-// Placeholder webhook endpoint for future payment integration
+// TODO: Future payment integration
 app.post("/webhooks/payment", handlePaymentWebhook);
 
 app.get("/api/debug/cors", async (c) => {
@@ -157,7 +151,6 @@ app.get("/api/debug/cors", async (c) => {
   });
 });
 
-// Add a simple OPTIONS test endpoint
 app.options("/api/debug/test-options", async (c) => {
   console.log("🧪 Test OPTIONS endpoint hit");
   return c.json({ message: "OPTIONS test successful" });
@@ -168,7 +161,6 @@ app.get("/api/debug/conversion-setup", async (c) => {
     let ffmpegPath = "Not found";
     let ffmpegExists = false;
 
-    // Try system FFmpeg first
     try {
       const { execSync } = require("child_process");
       const systemFfmpegPath = execSync("which ffmpeg", {
@@ -183,7 +175,6 @@ app.get("/api/debug/conversion-setup", async (c) => {
           .catch(() => false);
       }
     } catch (error) {
-      // Fallback to installer package
       try {
         const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
         ffmpegPath = ffmpegInstaller.path;
@@ -192,9 +183,7 @@ app.get("/api/debug/conversion-setup", async (c) => {
           .access(ffmpegInstaller.path)
           .then(() => true)
           .catch(() => false);
-      } catch (installerError) {
-        // Both failed
-      }
+      } catch (installerError) {}
     }
 
     const checks = {
@@ -249,9 +238,10 @@ app.post("/api/subscription/cancel", cancelSubscription);
 app.post("/api/cleanup/expired-files", cleanupExpiredFilesHandler);
 
 const port = process.env.PORT || 3001;
+
 console.log(`🚀 Server starting on port ${port}`);
 
-export default {
+Bun.serve({
   port,
   fetch: app.fetch,
-};
+});
