@@ -11,7 +11,6 @@ import { PlanBadge } from "@/components/plan-badge";
 import { GlobalQualitySelector } from "@/components/global-quality-selector";
 import { FileList } from "@/components/file-list";
 import { PricingModal } from "@/components/pricing-modal";
-import { UsageStats } from "@/components/usage-stats";
 import { canConvertClientSide, isImageFile, useClientImageConverter } from "@/hooks/use-client-image-converter";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +26,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -35,8 +33,7 @@ import { toast } from "sonner";
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
-  const { isOnline } = useOnlineDetector();
-  const { refreshUser } = useAuth();
+  const { isOnline, checkConnectivity } = useOnlineDetector();
 
   const {
     uploadProgress,
@@ -44,22 +41,17 @@ export default function UploadWithProgress() {
     handleFileRemoved: handleProgressFileRemoved,
     clearProgress,
     abortUpload,
-    areAllConversionsComplete,
     hasActiveOperations,
-    getConvertedFileNames,
     getConvertedFilePaths,
-    hasConvertibleFiles,
     hasAnyCompletedFiles,
   } = useUploadProgress();
   const formatSelection = useFormatSelection();
   const qualitySelection = useQualitySelection();
 
-  // Client-side conversion hook for unified handling
   const {
     convertFiles: convertClientSide,
     clearConversions,
     conversions: clientConversions,
-    areAllConversionsComplete: areAllClientConversionsComplete,
     hasActiveConversions: hasActiveClientConversions,
     hasCompletedConversions: hasCompletedClientConversions,
     downloadFile: downloadClientFile,
@@ -92,7 +84,6 @@ export default function UploadWithProgress() {
   };
 
   const handleStartConversion = async () => {
-    // Separate files into client-side and server-side processing
     const clientSideFiles = files.filter((file) => {
       if (!isImageFile(file)) return false;
       const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
@@ -107,33 +98,27 @@ export default function UploadWithProgress() {
       return true; // All non-image files go to server-side
     });
 
-    // Start client-side conversions immediately (no upload needed)
     if (clientSideFiles.length > 0) {
       await convertClientSide(clientSideFiles, formatSelection.selectedFormats, qualitySelection.selectedQualities);
     }
 
-    // Start server-side conversions (upload + convert)
     if (serverSideFiles.length > 0) {
       handleFilesAdded(serverSideFiles, formatSelection.selectedFormats, qualitySelection.selectedQualities);
     }
   };
 
-  // Unified completion checker that considers both client-side and server-side conversions
   const areAllUnifiedConversionsComplete = () => {
-    // Get all file IDs that should have conversions
     const allFileIds = files.map((f) => f.id);
 
     if (allFileIds.length === 0) return false;
 
     // Check each file to see if it's converted either client-side or server-side
     const allConverted = allFileIds.every((fileId) => {
-      // Check if it's converted client-side
       const clientConversion = clientConversions.find((c) => c.fileId === fileId);
       if (clientConversion && (clientConversion.completed || clientConversion.error)) {
         return true;
       }
 
-      // Check if it's converted server-side
       const serverConversion = uploadProgress.find((p) => p.fileId === fileId);
       if (serverConversion && (serverConversion.converted || serverConversion.error)) {
         return true;
@@ -145,28 +130,21 @@ export default function UploadWithProgress() {
     return allConverted;
   };
 
-  // Unified active operations checker
   const hasUnifiedActiveOperations = () => {
-    // Check client-side active conversions
     if (hasActiveClientConversions) return true;
 
-    // Check server-side active operations
     if (hasActiveOperations()) return true;
 
     return false;
   };
 
-  // Check if there are files ready to be converted (either uploaded and ready, or not yet started)
   const hasFilesToConvert = () => {
-    // Get files that haven't been processed by either client-side or server-side
     const unprocessedFiles = files.filter((file) => {
-      // Check if already processed client-side
       const clientConversion = clientConversions.find((c) => c.fileId === file.id);
       if (clientConversion && (clientConversion.completed || clientConversion.converting)) {
         return false;
       }
 
-      // Check if already processed server-side
       const serverProgress = uploadProgress.find((p) => p.fileId === file.id);
       if (serverProgress && (serverProgress.converted || serverProgress.converting || !serverProgress.error)) {
         return false;
@@ -175,19 +153,17 @@ export default function UploadWithProgress() {
       return true;
     });
 
-    // Also include files that are uploaded but not converted/failed
     const filesReadyToConvert = uploadProgress.filter((p) => !p.converted && !p.error && !p.aborted && p.completed);
 
     return unprocessedFiles.length > 0 || filesReadyToConvert.length > 0;
   };
 
-  // Get all converted file paths (both client-side and server-side)
-  const getAllConvertedFilePaths = () => {
-    const serverSidePaths = getConvertedFilePaths();
-    // Note: Client-side conversions don't have server paths, they're downloaded directly
-    // So we only return server-side paths for zip download
-    return serverSidePaths;
-  };
+  // const getAllConvertedFilePaths = () => {
+  //   const serverSidePaths = getConvertedFilePaths();
+  //   // Note: Client-side conversions don't have server paths, they're downloaded directly
+  //   // So we only return server-side paths for zip download
+  //   return serverSidePaths;
+  // };
 
   const handleDownloadAllAsZip = async () => {
     try {
@@ -204,7 +180,6 @@ export default function UploadWithProgress() {
         return;
       }
 
-      // If we have both client-side and server-side files, or multiple client-side files, create a ZIP
       if (totalFiles > 1 || (clientSideConversions.length > 0 && convertedFilePaths.length > 0)) {
         const JSZip = (await import("jszip")).default;
         const zip = new JSZip();
@@ -217,9 +192,7 @@ export default function UploadWithProgress() {
           }
         }
 
-        // Add server-side files to ZIP if any
         if (convertedFilePaths.length > 0) {
-          // For server-side files, we need to fetch them and add to ZIP
           for (const filePath of convertedFilePaths) {
             try {
               const response = await fetch(`/api/download/${encodeURIComponent(filePath)}`);
@@ -234,7 +207,6 @@ export default function UploadWithProgress() {
           }
         }
 
-        // Generate and download ZIP file
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement("a");
@@ -316,13 +288,18 @@ export default function UploadWithProgress() {
         <div className="flex flex-col gap-4">
           {/* Offline indicator */}
           {!isOnline && (
-            <div className="flex items-center justify-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-              <Badge variant="destructive" className="text-xs">
-                📡 Offline
-              </Badge>
-              <span className="text-sm text-destructive">
-                No internet connection. Uploads and conversions are paused.
-              </span>
+            <div className="flex items-center justify-between gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs">
+                  📡 Offline
+                </Badge>
+                <span className="text-sm text-destructive">
+                  No internet connection. Uploads and conversions are paused.
+                </span>
+              </div>
+              <Button variant="outline" size="sm" onClick={checkConnectivity} className="text-xs h-7 px-2">
+                Check Again
+              </Button>
             </div>
           )}
 

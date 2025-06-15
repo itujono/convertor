@@ -49,8 +49,9 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 
 [edge_runtime]
-enabled = true
+enabled = false
+# Edge functions disabled - using Railway backend for all API operations
 # Configure one of the supported request policies: `oneshot`, `per_worker`, or `shared`.
-policy = "per_worker"
+# policy = "per_worker"
 # Set the Deno version (defaults to 1.x for compatibility)
-deno_version = 2 
+# deno_version = 2 
