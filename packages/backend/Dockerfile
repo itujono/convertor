@@ -18,11 +18,8 @@ RUN bun install --frozen-lockfile
 COPY packages/backend ./packages/backend
 COPY packages/db ./packages/db
 
-# Set working directory to backend
-WORKDIR /app/packages/backend
-
 # Expose the port (Railway will set $PORT)
 EXPOSE $PORT
 
-# Start the application
-CMD ["bun", "run", "src/index.ts"] 
+# Start the application from the root directory to maintain workspace resolution
+CMD ["bun", "run", "packages/backend/src/index.ts"] 
