@@ -33,7 +33,7 @@ import {
   createCheckoutSession,
   getUserSubscription,
   cancelSubscription,
-  handleStripeWebhook,
+  handlePaymentWebhook,
 } from "./handlers/subscription";
 import type { Variables } from "./utils/types";
 
@@ -119,7 +119,8 @@ app.use(
   })
 );
 
-app.post("/webhooks/stripe", handleStripeWebhook);
+// Placeholder webhook endpoint for future payment integration
+app.post("/webhooks/payment", handlePaymentWebhook);
 
 app.get("/api/debug/cors", async (c) => {
   const corsOrigins = [

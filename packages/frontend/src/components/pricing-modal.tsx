@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { redirectToCheckout, STRIPE_PRICES } from "@/lib/stripe";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 interface PricingModalProps {
@@ -14,7 +13,6 @@ interface PricingModalProps {
 }
 
 export function PricingModal({ children }: PricingModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("monthly");
   const [isOpen, setIsOpen] = useState(false);
   const id = useId();
@@ -22,17 +20,6 @@ export function PricingModal({ children }: PricingModalProps) {
     settings: { plans },
   } = useAppSettings();
   const { premium, free } = plans;
-
-  const handlePlanSelect = async () => {
-    setIsLoading(true);
-    try {
-      const priceId = selectedPlan === "monthly" ? STRIPE_PRICES.premium_monthly : STRIPE_PRICES.premium_yearly;
-      await redirectToCheckout(priceId);
-    } catch (error) {
-      console.error("Failed to start checkout:", error);
-      setIsLoading(false);
-    }
-  };
 
   const getCostSavings = (yearlyPrice: number, monthlyPrice: number) => {
     if (!yearlyPrice || !monthlyPrice) {
@@ -116,9 +103,8 @@ export function PricingModal({ children }: PricingModalProps) {
           </div>
         </RadioGroup>
 
-        <Button disabled className="w-full mb-4" onClick={handlePlanSelect}>
-          Disabled for now
-          {/* {isLoading ? "Processing..." : `Choose ${selectedPlan === "monthly" ? "Monthly" : "Yearly"} Plan`} */}
+        <Button disabled className="w-full mb-4">
+          Payment Integration Coming Soon
         </Button>
 
         <div className="space-y-2">
