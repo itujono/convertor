@@ -211,7 +211,7 @@ export class ApiClient {
   }
 
   async downloadZip(fileNames: string[]) {
-    console.log("Downloading zip with file paths:", fileNames);
+    console.log("🗜️ downloadZip called with file paths:", fileNames);
 
     const {
       data: { session },
@@ -225,11 +225,18 @@ export class ApiClient {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
 
+    const requestBody = { filePaths: fileNames };
+    console.log("📦 Sending request body:", requestBody);
+    console.log("🌐 Request URL:", `${this.baseUrl}/api/download/zip`);
+
     const response = await fetch(`${this.baseUrl}/api/download/zip`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ filePaths: fileNames }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log("📡 Response status:", response.status);
+    console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: "Failed to download zip" }));

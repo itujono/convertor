@@ -16,8 +16,7 @@ import {
 import { getUploadStatus } from "../utils/async-s3-upload";
 import { supabaseAdmin } from "../utils/supabase";
 import type { Variables } from "../utils/types";
-import crypto from "crypto";
-
+import * as crypto from "crypto";
 const ffmpeg = require("fluent-ffmpeg");
 
 let ffmpegPath: string | null = null;
@@ -63,6 +62,90 @@ function getProgressKey(userId: string, filePath: string): string {
   return `${userId}:${filePath}`;
 }
 
+function getFileTypeCategory(
+  format: string
+): "image" | "video" | "audio" | "document" {
+  const imageFormats = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg"];
+  const videoFormats = ["mp4", "webm", "avi", "mov", "mkv", "wmv", "flv"];
+  const audioFormats = ["mp3", "wav", "ogg", "m4a", "flac", "aac"];
+
+  const lowerFormat = format.toLowerCase();
+
+  if (imageFormats.includes(lowerFormat)) return "image";
+  if (videoFormats.includes(lowerFormat)) return "video";
+  if (audioFormats.includes(lowerFormat)) return "audio";
+  return "document";
+}
+
+function calculateSmartTimeout(
+  fileSizeBytes: number,
+  format: string,
+  quality: string
+): number {
+  const fileType = getFileTypeCategory(format);
+  const fileSizeMB = fileSizeBytes / (1024 * 1024);
+
+  const baseTimeouts = {
+    image: 30 * 1000, // 30 seconds for images
+    audio: 2 * 60 * 1000, // 2 minutes for audio
+    video: 5 * 60 * 1000, // 5 minutes for video
+    document: 1 * 60 * 1000, // 1 minute for documents
+  };
+
+  const sizeMultipliers = {
+    image: 2 * 1000, // +2 seconds per MB
+    audio: 5 * 1000, // +5 seconds per MB
+    video: 15 * 1000, // +15 seconds per MB
+    document: 3 * 1000, // +3 seconds per MB
+  };
+
+  const qualityMultipliers = {
+    low: 0.7,
+    medium: 1.0,
+    high: 1.5,
+  };
+
+  const baseTimeout = baseTimeouts[fileType];
+  const sizeTimeout = fileSizeMB * sizeMultipliers[fileType];
+  const qualityMultiplier =
+    qualityMultipliers[quality as keyof typeof qualityMultipliers] || 1.0;
+
+  const calculatedTimeout = (baseTimeout + sizeTimeout) * qualityMultiplier;
+
+  const minTimeout = 30 * 1000;
+  const maxTimeout = 20 * 60 * 1000;
+
+  const finalTimeout = Math.max(
+    minTimeout,
+    Math.min(calculatedTimeout, maxTimeout)
+  );
+
+  console.log(`🕐 Smart timeout calculated:`, {
+    fileType,
+    fileSizeMB: Math.round(fileSizeMB * 100) / 100,
+    quality,
+    baseTimeout: baseTimeout / 1000 + "s",
+    sizeTimeout: Math.round(sizeTimeout / 1000) + "s",
+    qualityMultiplier,
+    finalTimeout: Math.round(finalTimeout / 1000) + "s",
+  });
+
+  return finalTimeout;
+}
+
+function getTimeoutMessage(timeoutMs: number, fileType: string): string {
+  const minutes = Math.round(timeoutMs / (60 * 1000));
+  const seconds = Math.round(timeoutMs / 1000);
+
+  if (minutes >= 1) {
+    return `Conversion timeout after ${minutes} minute${
+      minutes > 1 ? "s" : ""
+    } - ${fileType} file may be too large or complex. Try reducing file size or quality.`;
+  } else {
+    return `Conversion timeout after ${seconds} seconds - ${fileType} file may be too large or complex. Try reducing file size or quality.`;
+  }
+}
+
 export async function checkBatchLimitHandler(
   c: Context<{ Variables: Variables }>
 ) {
@@ -101,12 +184,21 @@ export async function getConversionProgressHandler(
     const decodedFilePath = decodeURIComponent(filePath);
 
     const progressKey = getProgressKey(user.id, decodedFilePath);
+    console.log("🔍 Progress lookup:", {
+      userId: user.id,
+      decodedFilePath,
+      progressKey,
+      availableKeys: Array.from(conversionProgress.keys()),
+    });
+
     const progress = conversionProgress.get(progressKey);
 
     if (!progress) {
+      console.log("❌ No progress found for key:", progressKey);
       return c.json({ error: "No conversion in progress for this file" }, 404);
     }
 
+    console.log("✅ Progress found:", progress);
     return c.json(progress);
   } catch (error) {
     console.error("Get conversion progress error:", error);
@@ -127,6 +219,15 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       format,
       quality = "medium",
     } = await c.req.json();
+
+    console.log("🚀 CONVERSION REQUEST STARTED:", {
+      userId: user.id,
+      filePath,
+      uploadId,
+      format,
+      quality,
+      timestamp: new Date().toISOString(),
+    });
 
     if ((!filePath && !uploadId) || !format) {
       return c.json({ error: "Missing filePath/uploadId or format" }, 400);
@@ -189,6 +290,11 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     console.log("✅ Conversion limit check passed");
 
     progressKey = getProgressKey(user.id, actualFilePath);
+    console.log("🔑 Setting progress key:", {
+      userId: user.id,
+      actualFilePath,
+      progressKey,
+    });
     conversionProgress.set(progressKey, { progress: 0, status: "starting" });
 
     console.log(
@@ -207,49 +313,71 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       region: process.env.AWS_REGION,
     });
 
-    // Quick S3 consistency check with reduced attempts
-    console.log("🔍 Quick S3 file existence check...");
+    // S3 consistency check - only needed for async uploads
+    let fileExists = true; // Assume file exists for direct uploads
 
-    let fileExists = false;
-    const maxConsistencyAttempts = 2; // Reduced from 5 to 2
+    if (uploadId) {
+      // Only do consistency check for async uploads (multipart/large files)
+      console.log("🔍 S3 consistency check for async upload...");
 
-    for (let attempt = 1; attempt <= maxConsistencyAttempts; attempt++) {
-      try {
-        fileExists = await checkFileExists(actualFilePath);
-        if (fileExists) {
-          console.log(`✅ File found on attempt ${attempt}`);
-          break;
+      const maxConsistencyAttempts = 2;
+      fileExists = false;
+
+      for (let attempt = 1; attempt <= maxConsistencyAttempts; attempt++) {
+        try {
+          fileExists = await checkFileExists(actualFilePath);
+          if (fileExists) {
+            console.log(`✅ Async upload file found on attempt ${attempt}`);
+            break;
+          }
+        } catch (error: any) {
+          console.error(
+            `❌ File existence check error on attempt ${attempt}:`,
+            error
+          );
         }
-      } catch (error: any) {
+
+        if (attempt < maxConsistencyAttempts) {
+          const delay = 1000;
+          console.log(`⏳ File not found, waiting ${delay}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      if (!fileExists) {
         console.error(
-          `❌ File existence check error on attempt ${attempt}:`,
-          error
+          "❌ Async upload file does not exist in S3:",
+          actualFilePath
+        );
+        return c.json(
+          {
+            error: `File not found: The uploaded file could not be found in storage. Please try uploading the file again.`,
+          },
+          404
         );
       }
-
-      if (attempt < maxConsistencyAttempts) {
-        const delay = 1000; // Fixed 1 second delay instead of exponential
-        console.log(`⏳ File not found, waiting ${delay}ms before retry...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-
-    if (!fileExists) {
-      console.error("❌ File does not exist in S3:", actualFilePath);
-      return c.json(
-        {
-          error: `File not found: The uploaded file could not be found in storage. Please try uploading the file again.`,
-        },
-        404
+    } else {
+      // For direct uploads, skip consistency check - file should be immediately available
+      console.log(
+        "⚡ Skipping S3 consistency check for direct upload (performance optimization)"
       );
     }
 
     let fileBuffer: Buffer;
+    const downloadStartTime = Date.now();
+
     try {
+      console.log("⬇️ Starting S3 download...");
       fileBuffer = await downloadFile(actualFilePath);
-      console.log("✅ S3 download completed, buffer size:", fileBuffer.length);
+      const downloadTime = Date.now() - downloadStartTime;
+      console.log(
+        `✅ S3 download completed in ${downloadTime}ms, buffer size: ${
+          fileBuffer.length
+        } bytes (${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB)`
+      );
     } catch (downloadError: any) {
-      console.error("❌ S3 download failed:", {
+      const downloadTime = Date.now() - downloadStartTime;
+      console.error(`❌ S3 download failed after ${downloadTime}ms:`, {
         error: downloadError.message,
         filePath: actualFilePath,
         errorCode: downloadError.Code || downloadError.code,
@@ -280,66 +408,13 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       `${Date.now()}_output_${baseName}.${format}`
     );
 
+    const writeStartTime = Date.now();
     console.log("📝 Writing temp input file:", tempInputPath);
     await Bun.write(tempInputPath, fileBuffer);
-    console.log("✅ Temp input file written");
+    const writeTime = Date.now() - writeStartTime;
+    console.log(`✅ Temp input file written in ${writeTime}ms`);
 
     const isSvgFile = fileExtension === "svg";
-
-    if (isSvgFile) {
-      console.log("🎨 Detected SVG file, using FFmpeg for conversion");
-
-      if (!["png", "jpg", "jpeg", "webp"].includes(format.toLowerCase())) {
-        throw new Error(
-          "SVG files can only be converted to PNG, JPG, JPEG, or WebP formats"
-        );
-      }
-
-      // Use FFmpeg for SVG conversion instead of Sharp
-      await new Promise((resolve, reject) => {
-        let command = ffmpeg(tempInputPath).output(tempOutputPath);
-
-        if (format.toLowerCase() === "png") {
-          command = command.outputOptions(["-f", "png"]);
-        } else if (
-          format.toLowerCase() === "jpg" ||
-          format.toLowerCase() === "jpeg"
-        ) {
-          command = command.outputOptions(["-f", "image2", "-vcodec", "mjpeg"]);
-        } else if (format.toLowerCase() === "webp") {
-          command = command.outputOptions(["-f", "webp"]);
-        }
-
-        command = applyQualitySettings(command, format, quality);
-
-        const conversionTimeout = setTimeout(() => {
-          console.error("❌ SVG conversion timeout after 2 minutes");
-          reject(new Error("SVG conversion timeout"));
-        }, 2 * 60 * 1000); // Reduced from 5 minutes to 2 minutes
-
-        command
-          .on("start", (commandLine: string) => {
-            console.log("🚀 FFmpeg SVG command started:", commandLine);
-          })
-          .on("end", () => {
-            console.log(
-              "✅ SVG conversion completed successfully using FFmpeg"
-            );
-            clearTimeout(conversionTimeout);
-            resolve(null);
-          })
-          .on("error", (err: any) => {
-            console.error("❌ FFmpeg SVG conversion failed:", err);
-            clearTimeout(conversionTimeout);
-            reject(err);
-          })
-          .run();
-      });
-    } else {
-      console.log(
-        "📁 Non-SVG file detected, proceeding with direct conversion"
-      );
-    }
 
     console.log("💾 Logging conversion to database");
     const { error: conversionError } = await supabaseAdmin
@@ -358,57 +433,171 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
 
     console.log("🎬 FFmpeg path:", ffmpegPath);
 
-    console.log("🔄 Starting conversion...");
+    if (isSvgFile) {
+      console.log("🎨 Detected SVG file, using FFmpeg for conversion");
 
-    await new Promise((resolve, reject) => {
-      let command = ffmpeg(tempInputPath).output(tempOutputPath);
-
-      command = applyQualitySettings(command, format, quality);
-      console.log("⚙️ Quality settings applied");
-
-      const conversionTimeout = setTimeout(() => {
-        console.error("❌ FFmpeg conversion timeout after 2 minutes");
-        reject(
-          new Error("Conversion timeout - file may be too large or complex")
+      if (!["png", "jpg", "jpeg", "webp"].includes(format.toLowerCase())) {
+        throw new Error(
+          "SVG files can only be converted to PNG, JPG, JPEG, or WebP formats"
         );
-      }, 2 * 60 * 1000); // Reduced from 5 minutes to 2 minutes
+      }
 
-      command
-        .on("start", (commandLine: string) => {
-          console.log("🚀 FFmpeg command started:", commandLine);
-          conversionProgress.set(progressKey, {
-            progress: 0,
-            status: "converting",
+      console.log("🔄 Starting SVG conversion...");
+      await new Promise((resolve, reject) => {
+        let command = ffmpeg(tempInputPath).output(tempOutputPath);
+
+        if (format.toLowerCase() === "png") {
+          command = command.outputOptions(["-f", "png"]);
+        } else if (
+          format.toLowerCase() === "jpg" ||
+          format.toLowerCase() === "jpeg"
+        ) {
+          command = command.outputOptions(["-f", "image2", "-vcodec", "mjpeg"]);
+        } else if (format.toLowerCase() === "webp") {
+          command = command.outputOptions(["-f", "webp"]);
+        }
+
+        command = applyQualitySettings(command, format, quality);
+
+        const smartTimeout = calculateSmartTimeout(
+          fileBuffer.length,
+          format,
+          quality
+        );
+        const conversionTimeout = setTimeout(() => {
+          const timeoutMessage = getTimeoutMessage(smartTimeout, "SVG");
+          console.error(`❌ SVG conversion timeout: ${timeoutMessage}`);
+          reject(new Error(timeoutMessage));
+        }, smartTimeout);
+
+        command
+          .on("start", (commandLine: string) => {
+            console.log("🚀 FFmpeg SVG command started:", commandLine);
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "converting",
+            });
+          })
+          .on("progress", (progress: any) => {
+            const percent = Math.round(progress.percent || 0);
+            console.log("📊 FFmpeg SVG progress:", percent + "% done");
+            conversionProgress.set(progressKey, {
+              progress: percent,
+              status: "converting",
+            });
+          })
+          .on("end", () => {
+            console.log(
+              "✅ SVG conversion completed successfully using FFmpeg"
+            );
+            conversionProgress.set(progressKey, {
+              progress: 100,
+              status: "uploading",
+            });
+            clearTimeout(conversionTimeout);
+            resolve(null);
+          })
+          .on("error", (err: any) => {
+            console.error("❌ FFmpeg SVG conversion failed:", err);
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "failed",
+            });
+            clearTimeout(conversionTimeout);
+            reject(err);
+          })
+          .run();
+      });
+    } else {
+      console.log(
+        "📁 Non-SVG file detected, starting standard FFmpeg conversion"
+      );
+
+      console.log("🔄 Starting conversion...");
+      console.log("📋 Pre-conversion details:", {
+        tempInputPath,
+        tempOutputPath,
+        format,
+        quality,
+        fileType: getFileTypeCategory(format),
+      });
+
+      await new Promise((resolve, reject) => {
+        let command = ffmpeg(tempInputPath).output(tempOutputPath);
+
+        command = applyQualitySettings(command, format, quality);
+        console.log("⚙️ Quality settings applied");
+
+        const smartTimeout = calculateSmartTimeout(
+          fileBuffer.length,
+          format,
+          quality
+        );
+        const fileType = getFileTypeCategory(format);
+        const conversionTimeout = setTimeout(() => {
+          const timeoutMessage = getTimeoutMessage(smartTimeout, fileType);
+          console.error(`❌ FFmpeg conversion timeout: ${timeoutMessage}`);
+          reject(new Error(timeoutMessage));
+        }, smartTimeout);
+
+        console.log("🎬 About to run FFmpeg command...");
+
+        command
+          .on("start", (commandLine: string) => {
+            console.log("🚀 FFmpeg command started:", commandLine);
+            console.log("📋 Input file:", tempInputPath);
+            console.log("📋 Output file:", tempOutputPath);
+            console.log("📋 Format:", format);
+            console.log("📋 Quality:", quality);
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "converting",
+            });
+          })
+          .on("progress", (progress: any) => {
+            const percent = Math.round(progress.percent || 0);
+            console.log("📊 FFmpeg progress:", percent + "% done");
+            conversionProgress.set(progressKey, {
+              progress: percent,
+              status: "converting",
+            });
+          })
+          .on("end", () => {
+            console.log("✅ FFmpeg conversion completed successfully");
+            conversionProgress.set(progressKey, {
+              progress: 100,
+              status: "uploading",
+            });
+            clearTimeout(conversionTimeout);
+            resolve(null);
+          })
+          .on("error", (err: any) => {
+            console.error("❌ FFmpeg error:", err);
+            console.error("❌ FFmpeg error details:", {
+              message: err.message,
+              stack: err.stack,
+              code: err.code,
+              signal: err.signal,
+            });
+            conversionProgress.set(progressKey, {
+              progress: 0,
+              status: "failed",
+            });
+            clearTimeout(conversionTimeout);
+            reject(err);
           });
-        })
-        .on("progress", (progress: any) => {
-          const percent = Math.round(progress.percent || 0);
-          console.log("📊 FFmpeg progress:", percent + "% done");
-          conversionProgress.set(progressKey, {
-            progress: percent,
-            status: "converting",
-          });
-        })
-        .on("end", () => {
-          console.log("✅ FFmpeg conversion completed successfully");
-          conversionProgress.set(progressKey, {
-            progress: 100,
-            status: "uploading",
-          });
-          clearTimeout(conversionTimeout);
-          resolve(null);
-        })
-        .on("error", (err: any) => {
-          console.error("❌ FFmpeg error:", err);
-          conversionProgress.set(progressKey, {
-            progress: 0,
-            status: "failed",
-          });
-          clearTimeout(conversionTimeout);
-          reject(err);
-        })
-        .run();
-    });
+
+        console.log("🎬 Running FFmpeg command now...");
+
+        try {
+          command.run();
+          console.log("✅ FFmpeg .run() called successfully");
+        } catch (runError) {
+          console.error("❌ Error calling FFmpeg .run():", runError);
+          throw runError;
+        }
+      });
+    }
 
     console.log("⬆️ Starting S3 upload of converted file");
     const uploadResult = await uploadConvertedFile(
@@ -544,6 +733,14 @@ function applyQualitySettings(
   const isVideo = ["mp4", "webm", "avi", "mov"].includes(format.toLowerCase());
   const isAudio = ["mp3", "wav", "ogg", "m4a"].includes(format.toLowerCase());
 
+  console.log("🎛️ Applying quality settings:", {
+    format,
+    quality,
+    isImage,
+    isVideo,
+    isAudio,
+  });
+
   if (isImage) {
     switch (quality) {
       case "low":
@@ -554,13 +751,19 @@ function applyQualitySettings(
         return command.outputOptions(["-q:v", "5"]);
     }
   } else if (isVideo) {
+    console.log("🎥 Applying video quality settings...");
+
+    // Simplified video settings - let FFmpeg choose codecs automatically
     switch (quality) {
       case "low":
+        console.log("🎥 Using low quality settings");
         return command.outputOptions(["-crf", "35", "-preset", "ultrafast"]);
       case "high":
-        return command.outputOptions(["-crf", "18", "-preset", "fast"]); // Changed from slow to fast
+        console.log("🎥 Using high quality settings");
+        return command.outputOptions(["-crf", "18", "-preset", "fast"]);
       default: // medium
-        return command.outputOptions(["-crf", "23", "-preset", "fast"]); // Changed from medium to fast
+        console.log("🎥 Using medium quality settings");
+        return command.outputOptions(["-crf", "23", "-preset", "fast"]);
     }
   } else if (isAudio) {
     switch (quality) {

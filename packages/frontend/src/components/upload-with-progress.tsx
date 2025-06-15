@@ -237,11 +237,19 @@ export default function UploadWithProgress() {
         });
       } else if (convertedFilePaths.length === 1 && clientSideConversions.length === 0) {
         console.log("Downloading single server file:", convertedFilePaths[0]);
-        await apiClient.downloadZip(convertedFilePaths);
+        console.log("Calling downloadZip with paths:", convertedFilePaths);
 
-        toast.success("Download started", {
-          description: "Downloading converted file",
-        });
+        try {
+          await apiClient.downloadZip(convertedFilePaths);
+          console.log("downloadZip completed successfully");
+
+          toast.success("Download started", {
+            description: "Downloading converted file",
+          });
+        } catch (error) {
+          console.error("downloadZip failed:", error);
+          throw error; // Re-throw to be caught by outer try-catch
+        }
       }
     } catch (error) {
       console.error("Failed to download files:", error);

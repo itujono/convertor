@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { abortClient } from "@/lib/abort-client";
+import { useOnlineDetector } from "@/hooks/use-online-detector";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -29,13 +30,14 @@ const uploadFile = async (
   onProgress: (progress: number) => void,
   onComplete: (filePath: string, uploadId?: string) => void,
   onError: (error: string) => void,
+  isOnline: boolean,
   abortSignal?: AbortSignal,
   retryCount: number = 0,
 ) => {
   const maxRetries = 3;
 
   try {
-    if (!navigator.onLine) {
+    if (!isOnline) {
       onError("No internet connection. Please check your connection and try again.");
       return;
     }
@@ -61,7 +63,7 @@ const uploadFile = async (
           description: `Retrying upload for ${file.name}`,
         });
         setTimeout(() => {
-          uploadFile(file, onProgress, onComplete, onError, abortSignal, retryCount + 1);
+          uploadFile(file, onProgress, onComplete, onError, isOnline, abortSignal, retryCount + 1);
         }, 2000);
         return;
       }
@@ -107,7 +109,7 @@ const uploadFile = async (
           description: `Retrying upload for ${file.name}`,
         });
         setTimeout(() => {
-          uploadFile(file, onProgress, onComplete, onError, abortSignal, retryCount + 1);
+          uploadFile(file, onProgress, onComplete, onError, isOnline, abortSignal, retryCount + 1);
         }, 2000 * (retryCount + 1)); // Exponential backoff
         return;
       }
@@ -231,6 +233,7 @@ export function useUploadProgress() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [abortControllers, setAbortControllers] = useState<Map<string, AbortController>>(new Map());
   const { refreshUser } = useAuth();
+  const { isOnline } = useOnlineDetector();
   const hasRefreshedRef = useRef(false);
 
   useEffect(() => {
@@ -353,6 +356,7 @@ export function useUploadProgress() {
         (error) => {
           setUploadProgress((prev) => prev.map((item) => (item.fileId === file.id ? { ...item, error } : item)));
         },
+        isOnline,
         controller.signal,
       );
     });

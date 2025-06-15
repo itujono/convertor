@@ -23,17 +23,24 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
   let tempZipPath: string | null = null;
 
   try {
+    console.log("🗜️ ZIP DOWNLOAD REQUEST RECEIVED");
     const user = c.get("user");
-    const { filePaths } = await c.req.json();
+    console.log("👤 User ID:", user.id);
+
+    const requestBody = await c.req.json();
+    console.log("📦 Request body:", requestBody);
+
+    const { filePaths } = requestBody;
 
     if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
+      console.log("❌ Invalid filePaths:", filePaths);
       return c.json({ error: "No files specified" }, 400);
     }
 
     console.log(
-      `Creating zip for user ${user.id} with ${filePaths.length} files:`
+      `🗜️ Creating zip for user ${user.id} with ${filePaths.length} files:`
     );
-    console.log("File paths:", filePaths);
+    console.log("📁 File paths:", filePaths);
 
     const tempDir = join(process.cwd(), "temp");
     await mkdir(tempDir, { recursive: true });
