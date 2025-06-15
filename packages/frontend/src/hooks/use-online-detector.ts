@@ -6,6 +6,7 @@ import { toast } from "sonner";
 export function useOnlineDetector() {
   const [isOnline, setIsOnline] = useState(true);
   const [wasOffline, setWasOffline] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState(0);
 
   const testConnectivity = useCallback(async (): Promise<boolean> => {
     try {
@@ -40,34 +41,49 @@ export function useOnlineDetector() {
     }
   }, []);
 
-  const checkConnectivity = useCallback(async () => {
-    const hasConnectivity = await testConnectivity();
+  const checkConnectivity = useCallback(
+    async (force: boolean = false) => {
+      const now = Date.now();
 
-    if (hasConnectivity !== isOnline) {
-      setIsOnline(hasConnectivity);
-
-      if (hasConnectivity && wasOffline) {
-        toast.success("🌐 Connection restored", {
-          description: "You're back online! Uploads and conversions can continue.",
-        });
-        setWasOffline(false);
-      } else if (!hasConnectivity && !wasOffline) {
-        setWasOffline(true);
-        toast.error("📡 Connection lost", {
-          description: "You're offline. Uploads and conversions are paused.",
-          duration: 6000,
-        });
+      // Debounce: Don't check more than once every 10 seconds unless forced
+      if (!force && now - lastCheckTime < 10000) {
+        console.log("🔄 Skipping connectivity check (debounced)");
+        return;
       }
-    }
-  }, [isOnline, wasOffline, testConnectivity]);
+
+      setLastCheckTime(now);
+      console.log("🌐 Checking connectivity...");
+
+      const hasConnectivity = await testConnectivity();
+
+      if (hasConnectivity !== isOnline) {
+        setIsOnline(hasConnectivity);
+
+        if (hasConnectivity && wasOffline) {
+          toast.success("🌐 Connection restored", {
+            description: "You're back online! Uploads and conversions can continue.",
+          });
+          setWasOffline(false);
+        } else if (!hasConnectivity && !wasOffline) {
+          setWasOffline(true);
+          toast.error("📡 Connection lost", {
+            description: "You're offline. Uploads and conversions are paused.",
+            duration: 6000,
+          });
+        }
+      }
+    },
+    [isOnline, wasOffline, testConnectivity, lastCheckTime],
+  );
 
   useEffect(() => {
-    checkConnectivity();
+    checkConnectivity(true); // Force initial check
 
-    const intervalId = setInterval(checkConnectivity, 30000);
+    // Reduced frequency: Check every 60 seconds instead of 30
+    const intervalId = setInterval(() => checkConnectivity(true), 60000);
 
     const handleOnline = () => {
-      setTimeout(checkConnectivity, 1000);
+      setTimeout(() => checkConnectivity(true), 1000);
     };
 
     const handleOffline = () => {
@@ -82,7 +98,8 @@ export function useOnlineDetector() {
     };
 
     const handleFocus = () => {
-      checkConnectivity();
+      // Don't force focus checks - let debouncing handle it
+      checkConnectivity(false);
     };
 
     window.addEventListener("online", handleOnline);
