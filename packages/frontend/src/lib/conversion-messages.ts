@@ -35,7 +35,6 @@ export const calculateRemainingConversions = (
 ): number => {
   const dailyLimit = plan === "free" ? 10 : 100;
 
-  // If it's a new day, user gets fresh quota
   if (checkDailyReset(lastReset)) {
     return dailyLimit;
   }

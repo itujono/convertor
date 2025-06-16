@@ -44,7 +44,6 @@ export class PresignedUploadClient {
     };
   }
 
-  // Initiate presigned upload
   async initiateUpload(options: PresignedUploadOptions): Promise<PresignedUploadResult> {
     const headers = await this.getAuthHeaders();
 
@@ -67,7 +66,6 @@ export class PresignedUploadClient {
     return response.json();
   }
 
-  // Upload file using presigned URL(s)
   async uploadFile(file: File, options: PresignedUploadOptions): Promise<string> {
     try {
       options.onProgress?.(5);
@@ -100,7 +98,6 @@ export class PresignedUploadClient {
     }
   }
 
-  // Single file upload
   private async uploadSingle(
     file: File,
     uploadInfo: PresignedUploadResult,
@@ -150,7 +147,6 @@ export class PresignedUploadClient {
     });
   }
 
-  // Multipart upload
   private async uploadMultipart(
     file: File,
     uploadInfo: PresignedUploadResult,
@@ -202,7 +198,6 @@ export class PresignedUploadClient {
     return uploadInfo.filePath;
   }
 
-  // Upload a single part
   private async uploadPart(
     file: File,
     partNumber: number,
@@ -235,7 +230,6 @@ export class PresignedUploadClient {
     };
   }
 
-  // Complete multipart upload
   private async completeMultipartUpload(
     uploadId: string,
     filePath: string,
@@ -259,7 +253,6 @@ export class PresignedUploadClient {
     }
   }
 
-  // Abort multipart upload
   async abortMultipartUpload(uploadId: string, filePath: string): Promise<void> {
     const headers = await this.getAuthHeaders();
 
@@ -279,5 +272,4 @@ export class PresignedUploadClient {
   }
 }
 
-// Export singleton instance
 export const presignedUploadClient = new PresignedUploadClient();
