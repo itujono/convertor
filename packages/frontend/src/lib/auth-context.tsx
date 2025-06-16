@@ -63,9 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      // Use the current origin for redirect URL
+      const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
+          redirectTo,
           queryParams: {
             access_type: "offline",
             prompt: "consent",
@@ -102,6 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleAuthChange = async (event: string, session: Session | null) => {
       if (!isMounted) return;
 
+      console.log(`Auth state change: ${event}`, {
+        hasSession: !!session,
+        sessionExpired: session?.expires_at ? session.expires_at * 1000 < Date.now() : false,
+      });
+
       setSession(session);
 
       const googleUserData = extractGoogleUserData(session);
@@ -109,11 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (session) {
         try {
-          if (event === "INITIAL_SESSION" && session.expires_at && session.expires_at * 1000 < Date.now()) {
-            console.log("Initial session token expired, waiting for refresh...");
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }
-
           const userData = await apiClient.getCurrentUser();
           if (isMounted) {
             setUser(userData);
@@ -121,27 +125,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error("Error fetching user data after auth change:", error);
 
-          if (error instanceof Error && (error.message.includes("Invalid token") || error.message.includes("JWT"))) {
-            try {
-              console.log("Attempting to refresh session due to token error...");
-              const {
-                data: { session: refreshedSession },
-                error: refreshError,
-              } = await supabase.auth.refreshSession();
-
-              if (!refreshError && refreshedSession && isMounted) {
-                setSession(refreshedSession);
-                const userData = await apiClient.getCurrentUser();
-                setUser(userData);
-                return;
-              }
-            } catch (refreshError) {
-              console.error("Failed to refresh session:", refreshError);
+          // If it's a token error and this is the initial session, the token might be expired
+          if (
+            error instanceof Error &&
+            (error.message.includes("Invalid token") || error.message.includes("JWT")) &&
+            event === "INITIAL_SESSION"
+          ) {
+            console.log("Initial session has expired token, clearing session to avoid stuck state");
+            if (isMounted) {
+              // Clear the expired session to avoid stuck loading
+              setSession(null);
+              setUser(null);
+              setGoogleUser(null);
             }
-          }
-
-          if (isMounted) {
-            setUser(null);
+          } else {
+            if (isMounted) {
+              setUser(null);
+            }
           }
         }
       } else {
@@ -173,13 +173,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const loadingTimeout = setTimeout(() => {
-      if (isMounted && isLoading) {
-        console.warn("Auth initialization timeout, setting loading to false");
-        setIsLoading(false);
-      }
-    }, 5000);
-
     initializeAuth();
 
     const {
@@ -188,7 +181,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
-      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);

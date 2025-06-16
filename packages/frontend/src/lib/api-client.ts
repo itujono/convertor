@@ -16,27 +16,30 @@ export class ApiClient {
     } = await supabase.auth.getSession();
 
     if (session?.access_token) {
-      // Check if token is expired or about to expire (within 30 seconds)
+      // Check if token is clearly expired (not just about to expire)
       const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
       const now = Date.now();
-      const thirtySecondsFromNow = now + 30000;
 
-      if (expiresAt > 0 && expiresAt < thirtySecondsFromNow) {
-        console.log("Token expired or expiring soon, refreshing...");
+      if (expiresAt > 0 && expiresAt < now) {
+        console.log("Token is expired, attempting refresh...");
         try {
           const {
             data: { session: refreshedSession },
             error,
           } = await supabase.auth.refreshSession();
           if (!error && refreshedSession?.access_token) {
+            console.log("Token refreshed successfully");
             return {
               "Content-Type": "application/json",
               Authorization: `Bearer ${refreshedSession.access_token}`,
             };
+          } else {
+            console.log("Token refresh failed:", error);
+            throw new Error("Session expired and refresh failed");
           }
         } catch (refreshError) {
-          console.error("Failed to refresh token:", refreshError);
-          // Fall through to use existing token
+          console.error("Failed to refresh expired token:", refreshError);
+          throw new Error("Session expired and refresh failed");
         }
       }
 
@@ -101,22 +104,42 @@ export class ApiClient {
   private async request(endpoint: string, options: RequestInit = {}) {
     const authHeaders = await this.getAuthHeaders();
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      headers: {
-        ...authHeaders,
-        ...options.headers,
-      },
-      ...options,
-    });
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    if (!response.ok) {
-      console.error(`API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
-      const errorData = await response.json().catch(() => ({ error: "Request failed" }));
-      console.error("Error data:", errorData);
-      throw new Error(errorData.error || "Request failed");
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers: {
+          ...authHeaders,
+          ...options.headers,
+        },
+        signal: controller.signal,
+        ...options,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.error(`API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
+        const errorData = await response.json().catch(() => ({ error: "Request failed" }));
+        console.error("Error data:", errorData);
+        throw new Error(errorData.error || "Request failed");
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          throw new Error("Request timeout - please check your connection");
+        }
+        throw error;
+      }
+
+      throw new Error("Request failed");
     }
-
-    return response.json();
   }
 
   async getCurrentUser() {
