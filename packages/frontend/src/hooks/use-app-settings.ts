@@ -28,7 +28,6 @@ interface User {
   isAuthenticated: boolean;
   usage?: {
     conversionsToday: number;
-    conversionsThisMonth: number;
     storageUsedGB: number;
   };
 }
@@ -52,8 +51,8 @@ export interface AppSettingsContext {
   getMaxFiles: () => number;
 
   canConvertMore: () => boolean;
-  getRemainingConversions: () => { daily: number; monthly: number };
-  getUsagePercentage: () => { daily: number; monthly: number; storage: number };
+  getRemainingConversions: () => { daily: number };
+  getUsagePercentage: () => { daily: number; storage: number };
 
   shouldShowUpgrade: boolean;
   shouldShowUsageStats: boolean;
@@ -80,7 +79,6 @@ export function useAppSettings(): AppSettingsContext {
             usage: {
               // Calculate proper conversions today using daily reset logic
               conversionsToday: checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0,
-              conversionsThisMonth: authUser.conversionCount || 0, // TODO: Implement monthly tracking separately
               storageUsedGB: 0, // TODO: Implement storage tracking
             },
           }
@@ -154,19 +152,14 @@ export function useAppSettings(): AppSettingsContext {
       if (!authUser) return true;
 
       const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
-      const conversionsThisMonth = authUser.conversionCount || 0; // TODO: Implement monthly tracking separately
 
-      return (
-        conversionsToday < planLimits.quotas.conversionsPerDay &&
-        conversionsThisMonth < planLimits.quotas.conversionsPerMonth
-      );
+      return conversionsToday < planLimits.quotas.conversionsPerDay;
     };
 
     const getRemainingConversions = () => {
       if (!authUser) {
         return {
           daily: planLimits.quotas.conversionsPerDay,
-          monthly: planLimits.quotas.conversionsPerMonth,
         };
       }
 
@@ -177,35 +170,20 @@ export function useAppSettings(): AppSettingsContext {
         authUser.lastReset,
       );
 
-      // Calculate monthly remaining (for now, same as daily since we don't track monthly separately)
-      const monthlyRemaining = Math.max(0, planLimits.quotas.conversionsPerMonth - (authUser.conversionCount || 0));
-
-      console.log("📊 Usage calculation:", {
-        authUserConversionCount: authUser.conversionCount,
-        dailyLimit: planLimits.quotas.conversionsPerDay,
-        monthlyLimit: planLimits.quotas.conversionsPerMonth,
-        dailyRemaining,
-        monthlyRemaining,
-        lastReset: authUser.lastReset,
-      });
-
       return {
         daily: dailyRemaining,
-        monthly: monthlyRemaining,
       };
     };
 
     const getUsagePercentage = () => {
       if (!authUser) {
-        return { daily: 0, monthly: 0, storage: 0 };
+        return { daily: 0, storage: 0 };
       }
 
       const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
-      const conversionsThisMonth = authUser.conversionCount || 0; // TODO: Implement monthly tracking separately
 
       return {
         daily: Math.min(100, (conversionsToday / planLimits.quotas.conversionsPerDay) * 100),
-        monthly: Math.min(100, (conversionsThisMonth / planLimits.quotas.conversionsPerMonth) * 100),
         storage: 0, // TODO: Implement storage tracking
       };
     };

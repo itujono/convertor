@@ -109,12 +109,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (session) {
         try {
+          if (event === "INITIAL_SESSION" && session.expires_at && session.expires_at * 1000 < Date.now()) {
+            console.log("Initial session token expired, waiting for refresh...");
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
           const userData = await apiClient.getCurrentUser();
           if (isMounted) {
             setUser(userData);
           }
         } catch (error) {
           console.error("Error fetching user data after auth change:", error);
+
+          if (error instanceof Error && (error.message.includes("Invalid token") || error.message.includes("JWT"))) {
+            try {
+              console.log("Attempting to refresh session due to token error...");
+              const {
+                data: { session: refreshedSession },
+                error: refreshError,
+              } = await supabase.auth.refreshSession();
+
+              if (!refreshError && refreshedSession && isMounted) {
+                setSession(refreshedSession);
+                const userData = await apiClient.getCurrentUser();
+                setUser(userData);
+                return;
+              }
+            } catch (refreshError) {
+              console.error("Failed to refresh session:", refreshError);
+            }
+          }
+
           if (isMounted) {
             setUser(null);
           }
@@ -148,6 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    const loadingTimeout = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn("Auth initialization timeout, setting loading to false");
+        setIsLoading(false);
+      }
+    }, 5000);
+
     initializeAuth();
 
     const {
@@ -156,6 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);

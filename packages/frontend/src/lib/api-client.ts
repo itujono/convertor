@@ -16,6 +16,30 @@ export class ApiClient {
     } = await supabase.auth.getSession();
 
     if (session?.access_token) {
+      // Check if token is expired or about to expire (within 30 seconds)
+      const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+      const now = Date.now();
+      const thirtySecondsFromNow = now + 30000;
+
+      if (expiresAt > 0 && expiresAt < thirtySecondsFromNow) {
+        console.log("Token expired or expiring soon, refreshing...");
+        try {
+          const {
+            data: { session: refreshedSession },
+            error,
+          } = await supabase.auth.refreshSession();
+          if (!error && refreshedSession?.access_token) {
+            return {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${refreshedSession.access_token}`,
+            };
+          }
+        } catch (refreshError) {
+          console.error("Failed to refresh token:", refreshError);
+          // Fall through to use existing token
+        }
+      }
+
       return {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
