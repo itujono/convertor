@@ -21,6 +21,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper function to clean OAuth parameters from URL
+function cleanOAuthParamsFromUrl() {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  const oauthParams = ["code", "state", "session_state", "access_token", "refresh_token", "token_type", "expires_in"];
+  let hasOAuthParams = false;
+
+  oauthParams.forEach((param) => {
+    if (url.searchParams.has(param)) {
+      url.searchParams.delete(param);
+      hasOAuthParams = true;
+    }
+  });
+
+  if (hasOAuthParams) {
+    console.log("Cleaning OAuth parameters from URL");
+    window.history.replaceState({}, document.title, url.toString());
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -124,6 +145,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const googleUserData = extractGoogleUserData(session);
       setGoogleUser(googleUserData);
 
+      // Clean OAuth params from URL after successful auth state change
+      if (session && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+        // Small delay to ensure the session is fully established
+        setTimeout(() => {
+          cleanOAuthParamsFromUrl();
+        }, 100);
+      }
+
       if (session) {
         try {
           const userData = await apiClient.getCurrentUser();
@@ -166,15 +195,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        const {
-          data: { session: initialSession },
-        } = await supabase.auth.getSession();
+        // Check for OAuth params in URL on initial load
+        const url = new URL(window.location.href);
+        const hasOAuthCode = url.searchParams.has("code");
 
-        if (isMounted) {
-          await handleAuthChange("INITIAL_SESSION", initialSession);
+        if (hasOAuthCode) {
+          const oauthTimeout = setTimeout(() => {
+            console.warn("OAuth processing taking too long, cleaning URL and continuing...");
+            cleanOAuthParamsFromUrl();
+            setIsLoading(false);
+          }, 15000); // 15 second timeout for OAuth processing
+
+          const {
+            data: { session: initialSession },
+          } = await supabase.auth.getSession();
+
+          clearTimeout(oauthTimeout);
+
+          if (isMounted) {
+            await handleAuthChange("INITIAL_SESSION", initialSession);
+          }
+        } else {
+          // Normal session check
+          const {
+            data: { session: initialSession },
+          } = await supabase.auth.getSession();
+
+          if (isMounted) {
+            await handleAuthChange("INITIAL_SESSION", initialSession);
+          }
         }
       } catch (error) {
         console.error("Error getting initial session:", error);
+        // Emergency cleanup if initialization fails
+        cleanOAuthParamsFromUrl();
         if (isMounted) {
           setIsLoading(false);
         }
