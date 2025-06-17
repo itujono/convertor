@@ -306,9 +306,13 @@ export function ReadyDownloads() {
     try {
       window.open(file.download_url, "_blank");
 
-      await apiClient.markFileDownloaded(file.id);
-
-      fetchUserFiles();
+      // Mark as downloaded in backend for analytics but don't remove from UI
+      try {
+        await apiClient.markFileDownloaded(file.id);
+      } catch (err) {
+        // Don't fail the download if marking fails
+        console.warn("Failed to mark file as downloaded:", err);
+      }
     } catch (err) {
       console.error("Failed to download file:", err);
     }
@@ -412,7 +416,7 @@ export function ReadyDownloads() {
           <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
             <p className="text-sm">
               <TriangleAlert className="me-3 -mt-0.5 inline-flex text-amber-500" size={16} aria-hidden="true" />
-              Files are automatically removed as soon as they are downloaded or after 24 hours
+              Files are automatically removed after 24 hours
             </p>
           </div>
         </CardHeader>
@@ -494,7 +498,7 @@ export function ReadyDownloads() {
         <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
           <p className="text-sm">
             <TriangleAlert className="me-3 -mt-0.5 inline-flex text-amber-500" size={16} aria-hidden="true" />
-            Files are automatically removed as soon as they are downloaded or after 24 hours
+            Files are automatically removed after 24 hours
           </p>
         </div>
       </CardHeader>
