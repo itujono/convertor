@@ -77,7 +77,7 @@ export default function UploadWithProgress() {
 
   const handleClearAll = async () => {
     await clearProgress();
-    clearConversions(); // Clear client-side conversions
+    clearConversions();
     formatSelection.clearFormats();
     qualitySelection.clearQualities();
     fileUploadActions.clearFiles();
@@ -95,7 +95,7 @@ export default function UploadWithProgress() {
         const targetFormat = formatSelection.selectedFormats[file.id] || "jpeg";
         return !canConvertClientSide(file, targetFormat);
       }
-      return true; // All non-image files go to server-side
+      return true;
     });
 
     if (clientSideFiles.length > 0) {
@@ -112,17 +112,14 @@ export default function UploadWithProgress() {
 
     if (allFileIds.length === 0) return false;
 
-    // Check each file to see if it's successfully converted either client-side or server-side
     const allConverted = allFileIds.every((fileId) => {
       const clientConversion = clientConversions.find((c) => c.fileId === fileId);
       if (clientConversion) {
-        // Only count as complete if successfully completed, not if there's an error
         return clientConversion.completed && !clientConversion.error;
       }
 
       const serverConversion = uploadProgress.find((p) => p.fileId === fileId);
       if (serverConversion) {
-        // Only count as complete if successfully converted, not if there's an error
         return serverConversion.converted && !serverConversion.error;
       }
 
@@ -159,13 +156,6 @@ export default function UploadWithProgress() {
 
     return unprocessedFiles.length > 0 || filesReadyToConvert.length > 0;
   };
-
-  // const getAllConvertedFilePaths = () => {
-  //   const serverSidePaths = getConvertedFilePaths();
-  //   // Note: Client-side conversions don't have server paths, they're downloaded directly
-  //   // So we only return server-side paths for zip download
-  //   return serverSidePaths;
-  // };
 
   const handleDownloadAllAsZip = async () => {
     try {
@@ -238,19 +228,15 @@ export default function UploadWithProgress() {
           description: "Downloading converted file",
         });
       } else if (convertedFilePaths.length === 1 && clientSideConversions.length === 0) {
-        console.log("Downloading single server file:", convertedFilePaths[0]);
-        console.log("Calling downloadZip with paths:", convertedFilePaths);
-
         try {
           await apiClient.downloadZip(convertedFilePaths);
-          console.log("downloadZip completed successfully");
 
           toast.success("Download started", {
             description: "Downloading converted file",
           });
         } catch (error) {
           console.error("downloadZip failed:", error);
-          throw error; // Re-throw to be caught by outer try-catch
+          throw error;
         }
       }
     } catch (error) {
