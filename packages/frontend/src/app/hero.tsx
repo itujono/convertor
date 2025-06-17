@@ -37,13 +37,13 @@ export default function Hero() {
           {/* Customer Stats */}
           <div className="flex items-center gap-4 pt-10" role="region" aria-label="Customer testimonials">
             <div className="flex -space-x-2" role="img" aria-label="Customer avatars">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-10 h-10 rounded-full bg-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
                 A
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-10 h-10 rounded-full bg-teal-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
                 B
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-orange-500 to-red-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-10 h-10 rounded-full bg-red-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
                 C
               </div>
               <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-slate-600 font-bold text-sm">

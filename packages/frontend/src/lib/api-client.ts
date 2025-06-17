@@ -142,6 +142,47 @@ export class ApiClient {
     }
   }
 
+  private async requestWithLongTimeout(endpoint: string, options: RequestInit = {}) {
+    const authHeaders = await this.getAuthHeaders();
+
+    // Create an AbortController for longer timeout for conversions
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minute timeout for conversions
+
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers: {
+          ...authHeaders,
+          ...options.headers,
+        },
+        signal: controller.signal,
+        ...options,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.error(`API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
+        const errorData = await response.json().catch(() => ({ error: "Request failed" }));
+        console.error("Error data:", errorData);
+        throw new Error(errorData.error || "Request failed");
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          throw new Error("Conversion timeout - large files may take longer to process");
+        }
+        throw error;
+      }
+
+      throw new Error("Request failed");
+    }
+  }
+
   async getCurrentUser() {
     return this.request("/api/user");
   }
@@ -198,14 +239,14 @@ export class ApiClient {
   }
 
   async convertFile(filePath: string, format: string, quality: string = "medium") {
-    return this.request("/api/convert", {
+    return this.requestWithLongTimeout("/api/convert", {
       method: "POST",
       body: JSON.stringify({ filePath, format, quality }),
     });
   }
 
   async convertFileWithUploadId(uploadId: string, format: string, quality: string = "medium") {
-    return this.request("/api/convert", {
+    return this.requestWithLongTimeout("/api/convert", {
       method: "POST",
       body: JSON.stringify({ uploadId, format, quality }),
     });
