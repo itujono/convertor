@@ -268,7 +268,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 export function useUploadProgress() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [abortControllers, setAbortControllers] = useState<Map<string, AbortController>>(new Map());
-  const { refreshUser } = useAuth();
+  const { refreshUser, updateConversionCountOptimistic } = useAuth();
   const { isOnline } = useOnlineDetector();
   const hasRefreshedRef = useRef(false);
 
@@ -370,17 +370,18 @@ export function useUploadProgress() {
                     description: `${fileName || "Your file"} is ready for download`,
                   });
 
+                  // Immediately update conversion count in UI
+                  updateConversionCountOptimistic(1);
+
                   console.log("🔄 Refreshing user data after successful conversion...");
-                  // Add a small delay to ensure backend database update is committed
-                  setTimeout(() => {
-                    refreshUser()
-                      .then(() => {
-                        console.log("✅ User data refreshed successfully after conversion");
-                      })
-                      .catch((error) => {
-                        console.error("❌ Failed to refresh user data after conversion:", error);
-                      });
-                  }, 500); // 500ms delay
+                  // Refresh immediately since DB should be committed by response time
+                  refreshUser()
+                    .then(() => {
+                      console.log("✅ User data refreshed successfully after conversion");
+                    })
+                    .catch((error) => {
+                      console.error("❌ Failed to refresh user data after conversion:", error);
+                    });
                 },
                 (error) => {
                   setUploadProgress((prev) =>

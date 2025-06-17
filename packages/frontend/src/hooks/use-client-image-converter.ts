@@ -211,7 +211,7 @@ async function convertImageClientSide(
 
 export function useClientImageConverter() {
   const [conversions, setConversions] = useState<ClientConversionProgress[]>([]);
-  const { refreshUser } = useAuth();
+  const { refreshUser, updateConversionCountOptimistic } = useAuth();
 
   const convertFiles = useCallback(
     async (
@@ -333,6 +333,9 @@ export function useClientImageConverter() {
               setConversions((prev) =>
                 prev.map((c) => (c.fileId === file.id ? { ...c, saving: false, savedToServer: true } : c)),
               );
+
+              // Immediately update conversion count in UI
+              updateConversionCountOptimistic(1);
             } catch (saveError) {
               console.error("Background save to server failed:", saveError);
               setConversions((prev) =>
@@ -371,20 +374,18 @@ export function useClientImageConverter() {
 
       try {
         console.log("🔄 Refreshing user data after client-side conversions...");
-        // Add a small delay to ensure backend database update is committed
-        setTimeout(async () => {
-          try {
-            await refreshUser();
-            console.log("✅ User data refreshed successfully after client-side conversions");
-          } catch (error) {
-            console.error("❌ Failed to refresh user data after client-side conversions:", error);
-          }
-        }, 500); // 500ms delay
+        // Refresh immediately since DB should be committed by response time
+        try {
+          await refreshUser();
+          console.log("✅ User data refreshed successfully after client-side conversions");
+        } catch (error) {
+          console.error("❌ Failed to refresh user data after client-side conversions:", error);
+        }
       } catch (error) {
         console.warn("Failed to refresh user data after conversions:", error);
       }
     },
-    [refreshUser],
+    [refreshUser, updateConversionCountOptimistic],
   );
 
   const downloadFile = useCallback(

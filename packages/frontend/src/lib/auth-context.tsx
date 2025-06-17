@@ -12,6 +12,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateConversionCountOptimistic: (increment?: number) => void;
   googleUser: {
     avatar_url?: string;
     full_name?: string;
@@ -39,6 +40,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [session]);
+
+  const updateConversionCountOptimistic = useCallback((increment: number = 1) => {
+    setUser((prevUser) => {
+      if (!prevUser) return prevUser;
+      return {
+        ...prevUser,
+        conversionCount: prevUser.conversionCount + increment,
+      };
+    });
+  }, []);
 
   const extractGoogleUserData = (session: Session | null) => {
     if (session?.user?.user_metadata) {
@@ -190,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     refreshUser,
     googleUser,
+    updateConversionCountOptimistic,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
