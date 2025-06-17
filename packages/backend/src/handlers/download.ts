@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { join } from "path";
-import { createWriteStream, existsSync } from "fs";
+import { createWriteStream, createReadStream, existsSync } from "fs";
 import { mkdir, unlink, stat } from "fs/promises";
 import { downloadFile, createSignedDownloadUrl } from "../utils/aws-storage";
 import type { Variables } from "../utils/types";
@@ -93,7 +93,8 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
             } bytes)`
           );
 
-          const zipBuffer = await Bun.file(cachedZip.filePath).arrayBuffer();
+          // Stream the cached file directly instead of loading into memory
+          const fileStream = createReadStream(cachedZip.filePath);
           const zipFileName = `converted_files_${Date.now()}.zip`;
 
           c.header("Content-Type", "application/zip");
@@ -101,9 +102,38 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
             "Content-Disposition",
             `attachment; filename="${zipFileName}"`
           );
-          c.header("Content-Length", zipBuffer.byteLength.toString());
+          c.header("Content-Length", stats.size.toString());
 
-          return c.body(new Uint8Array(zipBuffer));
+          // Convert Node.js ReadStream to Web ReadableStream for Hono
+          const webStream = new ReadableStream({
+            start(controller) {
+              fileStream.on("data", (chunk: string | Buffer) => {
+                const buffer =
+                  typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+                controller.enqueue(
+                  new Uint8Array(
+                    buffer.buffer,
+                    buffer.byteOffset,
+                    buffer.byteLength
+                  )
+                );
+              });
+
+              fileStream.on("end", () => {
+                controller.close();
+              });
+
+              fileStream.on("error", (error) => {
+                console.error("File stream error:", error);
+                controller.error(error);
+              });
+            },
+            cancel() {
+              fileStream.destroy();
+            },
+          });
+
+          return c.body(webStream);
         } else {
           console.log("🗑️ Cached ZIP is too old or empty, removing from cache");
           zipCache.delete(cacheKey);
@@ -134,46 +164,83 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
       // Use faster compression level (6 instead of 9) for better speed vs size tradeoff
       const archive = archiver("zip", { zlib: { level: 6 } });
 
+      let isStreamClosed = false;
+
       output.on("close", () => {
-        console.log(`Zip archive created: ${archive.pointer()} total bytes`);
-        resolve();
+        if (!isStreamClosed) {
+          isStreamClosed = true;
+          console.log(`Zip archive created: ${archive.pointer()} total bytes`);
+          resolve();
+        }
       });
-      archive.on("error", (err: Error) => reject(err));
+
+      output.on("error", (err: Error) => {
+        if (!isStreamClosed) {
+          isStreamClosed = true;
+          reject(err);
+        }
+      });
+
+      archive.on("error", (err: Error) => {
+        if (!isStreamClosed) {
+          isStreamClosed = true;
+          reject(err);
+        }
+      });
+
+      archive.on("warning", (err: any) => {
+        if (err.code === "ENOENT") {
+          console.warn("Archive warning:", err);
+        } else {
+          if (!isStreamClosed) {
+            isStreamClosed = true;
+            reject(err);
+          }
+        }
+      });
 
       archive.pipe(output);
 
-      // Download files in parallel for better performance
-      const downloadPromises = filePaths.map(async (filePath) => {
-        try {
-          console.log(`Downloading file: ${filePath}`);
-          const fileBuffer = await downloadFile(filePath);
-          const fileName = filePath.split("/").pop() || "file";
-          return { fileName, fileBuffer, filePath };
-        } catch (error) {
-          console.warn(`Could not download file ${filePath}:`, error);
-          return null;
+      try {
+        // Download files in parallel for better performance
+        const downloadPromises = filePaths.map(async (filePath) => {
+          try {
+            console.log(`Downloading file: ${filePath}`);
+            const fileBuffer = await downloadFile(filePath);
+            const fileName = filePath.split("/").pop() || "file";
+            return { fileName, fileBuffer, filePath };
+          } catch (error) {
+            console.warn(`Could not download file ${filePath}:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.allSettled(downloadPromises);
+        let successfulFiles = 0;
+
+        // Add successfully downloaded files to archive
+        for (const result of results) {
+          if (result.status === "fulfilled" && result.value) {
+            const { fileName, fileBuffer } = result.value;
+            console.log(
+              `Adding file to zip: ${fileName} (${fileBuffer.length} bytes)`
+            );
+            archive.append(fileBuffer, { name: fileName });
+            successfulFiles++;
+          }
         }
-      });
 
-      const results = await Promise.allSettled(downloadPromises);
-      let successfulFiles = 0;
+        console.log(
+          `Successfully added ${successfulFiles}/${filePaths.length} files to zip`
+        );
 
-      // Add successfully downloaded files to archive
-      for (const result of results) {
-        if (result.status === "fulfilled" && result.value) {
-          const { fileName, fileBuffer } = result.value;
-          console.log(
-            `Adding file to zip: ${fileName} (${fileBuffer.length} bytes)`
-          );
-          archive.append(fileBuffer, { name: fileName });
-          successfulFiles++;
+        await archive.finalize();
+      } catch (error) {
+        if (!isStreamClosed) {
+          isStreamClosed = true;
+          reject(error);
         }
       }
-
-      console.log(
-        `Successfully added ${successfulFiles}/${filePaths.length} files to zip`
-      );
-      archive.finalize();
     });
 
     const zipStats = await stat(tempZipPath);
@@ -189,20 +256,44 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
     shouldCleanupTemp = false;
     console.log("💾 ZIP file cached for future requests");
 
-    const zipBuffer = await Bun.file(tempZipPath).arrayBuffer();
-    console.log(`Streaming zip buffer size: ${zipBuffer.byteLength} bytes`);
-
-    console.log("Streaming zip file directly to client");
-
+    // Stream the newly created file directly instead of loading into memory
+    const fileStream = createReadStream(tempZipPath);
     const finalZipFileName = `converted_files_${Date.now()}.zip`;
+
     c.header("Content-Type", "application/zip");
     c.header(
       "Content-Disposition",
       `attachment; filename="${finalZipFileName}"`
     );
-    c.header("Content-Length", zipBuffer.byteLength.toString());
+    c.header("Content-Length", zipStats.size.toString());
 
-    return c.body(new Uint8Array(zipBuffer));
+    // Convert Node.js ReadStream to Web ReadableStream for Hono
+    const webStream = new ReadableStream({
+      start(controller) {
+        fileStream.on("data", (chunk: string | Buffer) => {
+          const buffer = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+          controller.enqueue(
+            new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+          );
+        });
+
+        fileStream.on("end", () => {
+          console.log("✅ Zip file streaming completed");
+          controller.close();
+        });
+
+        fileStream.on("error", (error) => {
+          console.error("File stream error:", error);
+          controller.error(error);
+        });
+      },
+      cancel() {
+        console.log("🛑 Stream cancelled, cleaning up file stream");
+        fileStream.destroy();
+      },
+    });
+
+    return c.body(webStream);
   } catch (error) {
     console.error("Zip download error:", error);
     return c.json({ error: "Zip download failed" }, 500);

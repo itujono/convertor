@@ -70,15 +70,6 @@ app.use(
         c.req.raw.headers.forEach((value, key) => {
           headersObj[key] = value;
         });
-
-        console.log("🔍 OPTIONS preflight request:", {
-          origin,
-          allowedOrigins,
-          isOriginAllowed: origin ? allowedOrigins.includes(origin) : true,
-          frontendUrl: process.env.FRONTEND_URL,
-          path: c.req.path,
-          headers: headersObj,
-        });
       }
 
       if (!origin) {
