@@ -37,6 +37,7 @@ import { formatBytes } from "@/hooks/use-file-upload";
 import { useAuth } from "@/lib/auth-context";
 
 const FILES_PER_PAGE = 5;
+const TIME_FOR_NEW_ZIP_MESSAGE = 6000;
 
 function isUrlLikelyExpired(url: string): boolean {
   try {
@@ -50,11 +51,9 @@ function isUrlLikelyExpired(url: string): boolean {
       const expiryTime = urlDate.getTime() + expirySeconds * 1000;
       const timeUntilExpiry = expiryTime - Date.now();
 
-      // Consider expired if less than 30 seconds remaining
       return timeUntilExpiry < 30000;
     }
 
-    // If we can't parse the expiry, assume it might be expired
     return true;
   } catch (e) {
     return true;
@@ -67,7 +66,6 @@ function ImagePreview({ file }: { file: UserFile }) {
     file.converted_format.toLowerCase(),
   );
 
-  // Don't show image if URL is likely expired
   const urlExpired = file.download_url ? isUrlLikelyExpired(file.download_url) : true;
 
   if (!isImage || !file.download_url || imageError || urlExpired) {
@@ -173,11 +171,14 @@ export function ReadyDownloads() {
   const [userFiles, setUserFiles] = useState<UserFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+  const [zipDownloadMessage, setZipDownloadMessage] = useState("Creating ZIP...");
   const [error, setError] = useState<string | null>(null);
   const [fileToDelete, setFileToDelete] = useState<UserFile | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const zipMessageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
 
   const fetchUserFiles = useCallback(async () => {
@@ -247,11 +248,9 @@ export function ReadyDownloads() {
       return;
     }
 
-    // Check if any files have URLs that might expire soon (within 2 minutes)
     const hasExpiringUrls = userFiles.some((file) => {
       if (!file.download_url) return false;
 
-      // Extract expiry from presigned URL if possible
       try {
         const url = new URL(file.download_url);
         const expires = url.searchParams.get("X-Amz-Expires");
@@ -266,7 +265,6 @@ export function ReadyDownloads() {
           return timeUntilExpiry < 2 * 60 * 1000;
         }
       } catch (e) {
-        // If we can't parse the URL, assume it might expire soon
         return true;
       }
 
@@ -296,6 +294,9 @@ export function ReadyDownloads() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      if (zipMessageTimeoutRef.current) {
+        clearTimeout(zipMessageTimeoutRef.current);
+      }
       apiClient.cancelGetUserFiles();
     };
   }, []);
@@ -305,25 +306,8 @@ export function ReadyDownloads() {
 
     try {
       window.open(file.download_url, "_blank");
-
-      // Mark as downloaded in backend for analytics but don't remove from UI
-      try {
-        await apiClient.markFileDownloaded(file.id);
-      } catch (err) {
-        // Don't fail the download if marking fails
-        console.warn("Failed to mark file as downloaded:", err);
-      }
     } catch (err) {
       console.error("Failed to download file:", err);
-    }
-  };
-
-  const handleDelete = async (fileId: string) => {
-    try {
-      await apiClient.deleteUserFile(fileId);
-      fetchUserFiles();
-    } catch (err) {
-      console.error("Failed to delete file:", err);
     }
   };
 
@@ -351,6 +335,13 @@ export function ReadyDownloads() {
 
   const handleDownloadAllAsZip = async () => {
     try {
+      setDownloadingZip(true);
+      setZipDownloadMessage("Creating ZIP...");
+
+      zipMessageTimeoutRef.current = setTimeout(() => {
+        setZipDownloadMessage("This might take a while...");
+      }, TIME_FOR_NEW_ZIP_MESSAGE);
+
       const filePaths = userFiles.filter((file) => file.download_url).map((file) => file.file_path);
 
       if (filePaths.length > 0) {
@@ -358,6 +349,14 @@ export function ReadyDownloads() {
       }
     } catch (err) {
       console.error("Failed to download zip:", err);
+    } finally {
+      setDownloadingZip(false);
+      setZipDownloadMessage("Creating ZIP...");
+
+      if (zipMessageTimeoutRef.current) {
+        clearTimeout(zipMessageTimeoutRef.current);
+        zipMessageTimeoutRef.current = null;
+      }
     }
   };
 
@@ -478,10 +477,11 @@ export function ReadyDownloads() {
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadAllAsZip}
+                disabled={downloadingZip}
                 className="h-8 px-3 w-full sm:w-auto"
               >
-                <PackageIcon className="size-3 mr-1" />
-                Download all as zip
+                <PackageIcon className={`size-3 mr-1 ${downloadingZip ? "animate-spin" : ""}`} />
+                {downloadingZip ? zipDownloadMessage : "Download all as zip"}
               </Button>
             )}
             <Button
