@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import UploadWithProgress from "@/components/upload-with-progress";
@@ -11,6 +12,53 @@ import { PricingModal } from "@/components/pricing-modal";
 
 export default function UploadSection() {
   const { session, isLoading, signInWithGoogle, user } = useAuth();
+
+  // Emergency fallback - if loading takes too long, show error state
+  const [showFallback, setShowFallback] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isLoading) {
+      const fallbackTimer = setTimeout(() => {
+        console.warn("⚠️ UploadSection: Auth loading too long, showing fallback");
+        setShowFallback(true);
+      }, 15000); // 15 seconds
+
+      return () => clearTimeout(fallbackTimer);
+    } else {
+      setShowFallback(false);
+    }
+  }, [isLoading]);
+
+  if (showFallback) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-8" id="upload">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-4 sm:p-6 lg:p-12 relative z-10">
+          <div className="text-center py-12">
+            <div className="w-20 h-20 mx-auto mb-4 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+              <svg
+                className="w-10 h-10 text-red-600 dark:text-red-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Loading Error</h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-6 max-w-md mx-auto">
+              We're having trouble loading the app. Please refresh the page to try again.
+            </p>
+            <Button onClick={() => window.location.reload()}>Refresh Page</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8" id="upload">

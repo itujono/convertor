@@ -132,12 +132,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
+    // Safety timeout to prevent infinite loading
+    const safetyTimeout = setTimeout(() => {
+      console.warn("⚠️ Auth initialization taking too long, forcing loading to false");
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }, 30000); // 30 seconds
+
     const handleAuthChange = async (event: string, session: Session | null) => {
       if (!isMounted) return;
 
-      console.log(`Auth state change: ${event}`, {
+      console.log(`🔐 Auth state change: ${event}`, {
         hasSession: !!session,
         sessionExpired: session?.expires_at ? session.expires_at * 1000 < Date.now() : false,
+        supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        supabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        apiUrl: process.env.NEXT_PUBLIC_API_URL,
+        siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
       });
 
       setSession(session);
@@ -155,12 +167,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (session) {
         try {
+          console.log("🔍 Fetching user data from API...");
           const userData = await apiClient.getCurrentUser();
+          console.log("✅ User data fetched successfully:", { userId: userData?.id, plan: userData?.plan });
           if (isMounted) {
             setUser(userData);
           }
         } catch (error) {
-          console.error("Error fetching user data after auth change:", error);
+          console.error("❌ Error fetching user data after auth change:", error);
 
           // If it's a token error and this is the initial session, the token might be expired
           if (
@@ -190,18 +204,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (isMounted) {
         setIsLoading(false);
+        clearTimeout(safetyTimeout);
       }
     };
 
     const initializeAuth = async () => {
       try {
+        console.log("🚀 Initializing auth...");
         // Check for OAuth params in URL on initial load
         const url = new URL(window.location.href);
         const hasOAuthCode = url.searchParams.has("code");
 
         if (hasOAuthCode) {
+          console.log("🔗 OAuth code detected in URL, processing...");
           const oauthTimeout = setTimeout(() => {
-            console.warn("OAuth processing taking too long, cleaning URL and continuing...");
+            console.warn("⏱️ OAuth processing taking too long, cleaning URL and continuing...");
             cleanOAuthParamsFromUrl();
             setIsLoading(false);
           }, 15000); // 15 second timeout for OAuth processing
@@ -216,6 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await handleAuthChange("INITIAL_SESSION", initialSession);
           }
         } else {
+          console.log("🔍 Checking for existing session...");
           // Normal session check
           const {
             data: { session: initialSession },
@@ -226,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("Error getting initial session:", error);
+        console.error("❌ Error getting initial session:", error);
         // Emergency cleanup if initialization fails
         cleanOAuthParamsFromUrl();
         if (isMounted) {
@@ -244,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
     };
   }, []);
 
