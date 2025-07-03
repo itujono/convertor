@@ -168,6 +168,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session) {
         try {
           console.log("🔍 Fetching user data from API...");
+          // First test if the API is reachable
+          try {
+            console.log("🏥 Testing API health...");
+            await apiClient.healthCheck();
+            console.log("✅ API health check passed");
+          } catch (healthError) {
+            console.error("❌ API health check failed:", healthError);
+          }
+
           const userData = await apiClient.getCurrentUser();
           console.log("✅ User data fetched successfully:", { userId: userData?.id, plan: userData?.plan });
           if (isMounted) {

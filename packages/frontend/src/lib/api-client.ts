@@ -106,7 +106,13 @@ export class ApiClient {
 
     // Create an AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => {
+      console.error(`⏱️ API request timeout after 5s for ${endpoint}`);
+      controller.abort();
+    }, 5000); // 5 second timeout for faster debugging
+
+    console.log(`📡 Making API request to: ${this.baseUrl}${endpoint}`);
+    console.log(`📡 Request headers:`, { ...authHeaders });
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -119,20 +125,26 @@ export class ApiClient {
       });
 
       clearTimeout(timeoutId);
+      console.log(`📡 API response status: ${response.status} for ${endpoint}`);
 
       if (!response.ok) {
-        console.error(`API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
+        console.error(`❌ API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
         const errorData = await response.json().catch(() => ({ error: "Request failed" }));
-        console.error("Error data:", errorData);
+        console.error("❌ Error data:", errorData);
         throw new Error(errorData.error || "Request failed");
       }
 
-      return response.json();
+      const data = await response.json();
+      console.log(`✅ API request successful for ${endpoint}`);
+      return data;
     } catch (error) {
       clearTimeout(timeoutId);
 
+      console.error(`❌ API request error for ${endpoint}:`, error);
+
       if (error instanceof Error) {
         if (error.name === "AbortError") {
+          console.error(`⏱️ Request timeout for ${endpoint}`);
           throw new Error("Request timeout - please check your connection");
         }
         throw error;
