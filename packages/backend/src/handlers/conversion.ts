@@ -234,6 +234,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
     }
 
     let actualFilePath = filePath;
+    let originalFileName: string;
 
     // If uploadId is provided, check if the async upload is completed
     if (uploadId) {
@@ -280,10 +281,16 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
         }
 
         actualFilePath = uploadStatus.s3FilePath;
+        originalFileName = uploadStatus.fileName; // Get original filename from upload status
         console.log(
-          `✅ Async upload completed, using filePath: ${actualFilePath}`
+          `✅ Async upload completed, using filePath: ${actualFilePath}, originalFileName: ${originalFileName}`
         );
+      } else {
+        throw new Error("Upload status completed but missing fileName");
       }
+    } else {
+      // For direct uploads, extract original filename from file path
+      originalFileName = actualFilePath.split("/").pop() || "file";
     }
 
     await checkConversionLimit(user.id);
@@ -399,7 +406,7 @@ export async function convertHandler(c: Context<{ Variables: Variables }>) {
       throw downloadError; // Re-throw other S3 errors
     }
 
-    const originalFileName = actualFilePath.split("/").pop() || "file";
+    // originalFileName is already set above based on upload source
     const baseName = originalFileName.split(".")[0];
     const fileExtension = originalFileName.split(".").pop()?.toLowerCase();
     tempInputPath = join(tempDir, `${Date.now()}_input_${originalFileName}`);

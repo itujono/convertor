@@ -49,6 +49,10 @@ export interface AppSettings {
     retryAttempts: number;
     qualityPresets: string[];
   };
+  storage: {
+    streamingUploadThresholdMB: number;
+    streamingUploadThresholdBytes: number;
+  };
   ui: {
     showPlanUpgrade: boolean;
     showUsageStats: boolean;
@@ -167,6 +171,10 @@ export const AppSettings: AppSettings = {
     retryAttempts: 3,
     qualityPresets: ["low", "medium", "high"],
   },
+  storage: {
+    streamingUploadThresholdMB: 75,
+    streamingUploadThresholdBytes: 75 * 1024 * 1024, // 75MB
+  },
   ui: {
     showPlanUpgrade: true,
     showUsageStats: true,
@@ -241,4 +249,8 @@ export const getPlanFeatures = (plan: UserPlan): string[] => {
   if (limits.features.advancedSettings) features.push("Advanced settings");
 
   return features;
+};
+
+export const getStreamingUploadThreshold = () => {
+  return AppSettings.storage;
 };

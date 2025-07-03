@@ -433,7 +433,7 @@ export default function UploadWithProgress() {
                         "Offline - Cannot Convert"
                       ) : (
                         <>
-                          Convert All Files{" "}
+                          Convert all files{" "}
                           <span role="img" aria-label="Lightning">
                             ⚡️
                           </span>
