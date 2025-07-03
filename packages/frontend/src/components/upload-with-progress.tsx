@@ -157,6 +157,43 @@ export default function UploadWithProgress() {
     return unprocessedFiles.length > 0 || filesReadyToConvert.length > 0;
   };
 
+  const getSmartConvertButtonText = () => {
+    if (files.length === 0) return "Convert files";
+
+    const fileTypes = files.map((fileWithPreview) => {
+      const fileType = fileWithPreview.file.type.toLowerCase();
+      if (fileType.startsWith("image/")) return "image";
+      if (fileType.startsWith("video/")) return "video";
+      if (fileType.startsWith("audio/")) return "audio";
+      return "file";
+    });
+
+    const uniqueTypes = Array.from(new Set(fileTypes));
+    const typeCounts = fileTypes.reduce((acc, type) => {
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    if (uniqueTypes.length > 1) {
+      return "Convert all these files";
+    }
+
+    const singleType = uniqueTypes[0];
+    const count = typeCounts[singleType];
+
+    if (singleType === "image") {
+      return count === 1 ? "Convert the image" : "Convert the images";
+    }
+    if (singleType === "video") {
+      return count === 1 ? "Convert the video" : "Convert the videos";
+    }
+    if (singleType === "audio") {
+      return count === 1 ? "Convert the audio" : "Convert the audio files";
+    }
+
+    return count === 1 ? "Convert the file" : "Convert all files";
+  };
+
   const handleDownloadAllAsZip = async () => {
     try {
       setIsDownloadingZip(true);
@@ -433,7 +470,7 @@ export default function UploadWithProgress() {
                         "Offline - Cannot Convert"
                       ) : (
                         <>
-                          Convert all files{" "}
+                          {getSmartConvertButtonText()}{" "}
                           <span role="img" aria-label="Lightning">
                             ⚡️
                           </span>
