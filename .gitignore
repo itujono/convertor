@@ -174,4 +174,7 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 
+# Backend temporary files (conversion cache)
+packages/backend/temp/
+
 .cursor
