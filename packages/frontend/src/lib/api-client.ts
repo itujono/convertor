@@ -145,9 +145,10 @@ export class ApiClient {
   private async requestWithLongTimeout(endpoint: string, options: RequestInit = {}) {
     const authHeaders = await this.getAuthHeaders();
 
-    // Create an AbortController for longer timeout for conversions
+    // Create an AbortController for conversion timeout
+    // With hardware acceleration, conversions should be much faster
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minute timeout for conversions
+    const timeoutId = setTimeout(() => controller.abort(), 12 * 60 * 1000); // 12 minute timeout (generous buffer over 10min backend max)
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {

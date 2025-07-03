@@ -36,6 +36,8 @@ import {
   handlePaymentWebhook,
 } from "./handlers/subscription";
 import type { Variables } from "./utils/types";
+import { join } from "path";
+import { supabaseAdmin } from "./utils/supabase";
 
 const app = new Hono<{ Variables: Variables }>();
 
@@ -174,6 +176,84 @@ app.get("/api/debug/conversion-setup", async (c) => {
 
     return c.json({ checks });
   } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Cleanup endpoint for stuck conversions
+app.post("/api/admin/cleanup-stuck-conversions", authMiddleware, async (c) => {
+  try {
+    // Clean up conversions older than 30 minutes that are still pending
+    const thirtyMinutesAgo = new Date(
+      Date.now() - 30 * 60 * 1000
+    ).toISOString();
+
+    const { data: stuckConversions, error: selectError } = await supabaseAdmin
+      .from("conversions")
+      .select("*")
+      .eq("status", "pending")
+      .lt("created_at", thirtyMinutesAgo);
+
+    if (selectError) {
+      throw new Error(
+        `Failed to fetch stuck conversions: ${selectError.message}`
+      );
+    }
+
+    const { error: updateError, count } = await supabaseAdmin
+      .from("conversions")
+      .update({ status: "failed" })
+      .eq("status", "pending")
+      .lt("created_at", thirtyMinutesAgo);
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update stuck conversions: ${updateError.message}`
+      );
+    }
+
+    // Clean up temp files
+    const tempDir = join(process.cwd(), "temp");
+    const fs = await import("fs").then((m) => m.promises);
+
+    try {
+      const files = await fs.readdir(tempDir);
+      let cleanedFiles = 0;
+
+      for (const file of files) {
+        const filePath = join(tempDir, file);
+        try {
+          const stats = await fs.stat(filePath);
+          const fileAge = Date.now() - stats.mtime.getTime();
+
+          // Delete files older than 30 minutes
+          if (fileAge > 30 * 60 * 1000) {
+            await fs.unlink(filePath);
+            cleanedFiles++;
+            console.log(`🗑️ Cleaned up temp file: ${file}`);
+          }
+        } catch (fileError) {
+          console.error(`Failed to clean temp file ${file}:`, fileError);
+        }
+      }
+
+      return c.json({
+        message: "Cleanup completed",
+        conversionsUpdated: count || 0,
+        stuckConversions: stuckConversions || [],
+        tempFilesRemoved: cleanedFiles,
+      });
+    } catch (fsError) {
+      return c.json({
+        message: "Conversion cleanup completed, temp cleanup failed",
+        conversionsUpdated: count || 0,
+        stuckConversions: stuckConversions || [],
+        tempCleanupError:
+          fsError instanceof Error ? fsError.message : "Unknown error",
+      });
+    }
+  } catch (error: any) {
+    console.error("Cleanup error:", error);
     return c.json({ error: error.message }, 500);
   }
 });
