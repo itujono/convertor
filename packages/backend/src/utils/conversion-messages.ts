@@ -1,4 +1,4 @@
-import { AppSettings } from "../../../frontend/src/lib/app-settings";
+import { AppSettings } from "../config/app-settings";
 
 export interface ConversionLimitError {
   type: "daily_limit_reached" | "insufficient_conversions";

@@ -1,46 +1,138 @@
-import { S3Client } from "bun";
-import { AppSettings } from "../../../frontend/src/lib/app-settings";
-
-// Bun S3 client configuration
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "ap-southeast-2",
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  bucket: process.env.AWS_S3_BUCKET!,
-});
-
-const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
-const CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN;
+import { AppSettings } from "../config/app-settings";
 
 // Detect Railway environment
 const isRailway = !!(
   process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
 );
 
+// Try to detect if Bun's S3 API is available
+let BunS3Client: any = null;
+let useAwsSDK = false;
+
+try {
+  // Try to import Bun's S3Client
+  const bunModule = await import("bun");
+  BunS3Client = bunModule.S3Client;
+  if (!BunS3Client) {
+    throw new Error("S3Client not available in this Bun version");
+  }
+  console.log("✅ Using Bun's native S3 API");
+  console.log(`🔧 Bun version: ${process.versions.bun || "unknown"}`);
+} catch (error) {
+  console.log("⚠️ Bun's S3 API not available, falling back to AWS SDK");
+  console.log(`🔧 Bun version: ${process.versions.bun || "unknown"}`);
+  console.log(
+    `❌ Error details: ${
+      error instanceof Error ? error.message : "Unknown error"
+    }`
+  );
+  useAwsSDK = true;
+}
+
+// AWS SDK fallback imports (only imported if needed)
+let S3Client: any = null;
+let PutObjectCommand: any = null;
+let GetObjectCommand: any = null;
+let HeadObjectCommand: any = null;
+let DeleteObjectCommand: any = null;
+let getSignedUrl: any = null;
+
+if (useAwsSDK) {
+  try {
+    console.log("📦 Loading AWS SDK packages...");
+    const awsS3 = await import("@aws-sdk/client-s3");
+    const presigner = await import("@aws-sdk/s3-request-presigner");
+
+    S3Client = awsS3.S3Client;
+    PutObjectCommand = awsS3.PutObjectCommand;
+    GetObjectCommand = awsS3.GetObjectCommand;
+    HeadObjectCommand = awsS3.HeadObjectCommand;
+    DeleteObjectCommand = awsS3.DeleteObjectCommand;
+    getSignedUrl = presigner.getSignedUrl;
+
+    console.log("✅ AWS SDK packages loaded successfully");
+  } catch (error) {
+    console.error("❌ Failed to load AWS SDK packages:", error);
+    throw new Error("AWS SDK fallback failed - packages not available");
+  }
+}
+
+const BUCKET_NAME = process.env.AWS_S3_BUCKET!;
+const CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN;
+
+// Initialize appropriate S3 client
+let s3Client: any;
+
+if (useAwsSDK) {
+  s3Client = new S3Client({
+    region: process.env.AWS_REGION || "ap-southeast-2",
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+} else {
+  s3Client = new BunS3Client({
+    region: process.env.AWS_REGION || "ap-southeast-2",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    bucket: process.env.AWS_S3_BUCKET!,
+  });
+}
+
 // Log S3 configuration on startup
-console.log("🔧 S3 Configuration (Bun S3 Client):", {
-  region: process.env.AWS_REGION,
-  bucket: BUCKET_NAME,
-  hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-  hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
-  cloudfront: CLOUDFRONT_DOMAIN || "not configured",
-  isRailway,
-  railwayEnv: process.env.RAILWAY_ENVIRONMENT || "unknown",
-});
+console.log(
+  `🔧 S3 Configuration (${useAwsSDK ? "AWS SDK" : "Bun S3 Client"}):`,
+  {
+    region: process.env.AWS_REGION,
+    bucket: BUCKET_NAME,
+    hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+    hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+    cloudfront: CLOUDFRONT_DOMAIN || "not configured",
+    isRailway,
+    railwayEnv: process.env.RAILWAY_ENVIRONMENT || "unknown",
+  }
+);
 
 // Test S3 connectivity on startup
 async function testS3Connection() {
   try {
     console.log("🔌 Testing S3 connection...");
-    const testFile = s3Client.file("test-connection-file-that-does-not-exist");
-    const exists = await testFile.exists();
 
-    if (exists) {
-      console.log("❌ Unexpected: Test file exists (this should not happen)");
+    if (useAwsSDK) {
+      const command = new HeadObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: "test-connection-file-that-does-not-exist",
+      });
+
+      try {
+        await s3Client.send(command);
+        console.log("❌ Unexpected: Test file exists (this should not happen)");
+      } catch (error: any) {
+        if (
+          error.name === "NotFound" ||
+          error.$metadata?.httpStatusCode === 404
+        ) {
+          console.log(
+            "✅ S3 connection test successful (got expected 404 for non-existent file)"
+          );
+        } else {
+          console.error("❌ S3 connection test failed:", error.message);
+        }
+      }
     } else {
-      console.log(
-        "✅ S3 connection test successful (got expected false for non-existent file)"
+      const testFile = s3Client.file(
+        "test-connection-file-that-does-not-exist"
       );
+      const exists = await testFile.exists();
+
+      if (exists) {
+        console.log("❌ Unexpected: Test file exists (this should not happen)");
+      } else {
+        console.log(
+          "✅ S3 connection test successful (got expected false for non-existent file)"
+        );
+      }
     }
   } catch (error: any) {
     console.error("❌ S3 connection test failed:", {
@@ -65,43 +157,55 @@ export interface SignedUrlResult {
   expiresIn: number;
 }
 
-// Large file upload using Bun's streaming writer
+// Large file upload using appropriate method
 async function uploadLargeFile(
   buffer: Buffer,
   filePath: string,
   mimeType: string
 ): Promise<void> {
-  console.log(
-    `🔄 Starting large file upload using Bun's streaming writer: ${filePath}`
-  );
+  console.log(`🔄 Starting large file upload: ${filePath}`);
 
-  const s3File = s3Client.file(filePath);
-
-  try {
-    const writer = s3File.writer({
-      type: mimeType,
-      retry: 3,
-      queueSize: 10,
-      partSize: 5 * 1024 * 1024, // 5MB chunks
+  if (useAwsSDK) {
+    // Use AWS SDK multipart upload for large files
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: filePath,
+      Body: buffer,
+      ContentType: mimeType,
     });
 
-    // Write the buffer in chunks
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-    for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
-      const chunk = buffer.slice(i, i + CHUNK_SIZE);
-      await writer.write(chunk);
-      console.log(
-        `📤 Uploaded chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(
-          buffer.length / CHUNK_SIZE
-        )}`
-      );
-    }
-
-    await writer.end();
+    await s3Client.send(command);
     console.log(`🎉 Large file upload completed successfully!`);
-  } catch (error) {
-    console.error(`❌ Large file upload failed:`, error);
-    throw error;
+  } else {
+    // Use Bun's streaming writer
+    const s3File = s3Client.file(filePath);
+
+    try {
+      const writer = s3File.writer({
+        type: mimeType,
+        retry: 3,
+        queueSize: 10,
+        partSize: 5 * 1024 * 1024, // 5MB chunks
+      });
+
+      // Write the buffer in chunks
+      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+      for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+        const chunk = buffer.slice(i, i + CHUNK_SIZE);
+        await writer.write(chunk);
+        console.log(
+          `📤 Uploaded chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(
+            buffer.length / CHUNK_SIZE
+          )}`
+        );
+      }
+
+      await writer.end();
+      console.log(`🎉 Large file upload completed successfully!`);
+    } catch (error) {
+      console.error(`❌ Large file upload failed:`, error);
+      throw error;
+    }
   }
 }
 
@@ -134,7 +238,7 @@ export async function uploadFile(
 
   const contentType = mimeType || "application/octet-stream";
 
-  // Use streaming writer for files larger than the configured threshold
+  // Use streaming upload for files larger than the configured threshold
   if (fileBuffer.length > streamingThreshold) {
     console.log(
       `📦 File is ${(fileBuffer.length / 1024 / 1024).toFixed(
@@ -149,7 +253,7 @@ export async function uploadFile(
       throw error;
     }
   } else {
-    // Simple upload for small files using Bun.write
+    // Simple upload for small files
     console.log(
       `📤 Uploading small file: ${filePath} (${fileBuffer.length} bytes)`
     );
@@ -162,8 +266,19 @@ export async function uploadFile(
         console.log(`🔄 Upload attempt ${attempt}/${maxRetries}...`);
         const uploadStartTime = Date.now();
 
-        const s3File = s3Client.file(filePath);
-        await s3File.write(fileBuffer, { type: contentType });
+        if (useAwsSDK) {
+          const command = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: filePath,
+            Body: fileBuffer,
+            ContentType: contentType,
+          });
+
+          await s3Client.send(command);
+        } else {
+          const s3File = s3Client.file(filePath);
+          await s3File.write(fileBuffer, { type: contentType });
+        }
 
         const uploadDuration = Date.now() - uploadStartTime;
         console.log(
@@ -202,16 +317,14 @@ export async function uploadFile(
     }
   }
 
-  // Generate public URL (CloudFront if available, otherwise S3)
+  // Generate public URL
   const publicUrl = CLOUDFRONT_DOMAIN
-    ? `https://${CLOUDFRONT_DOMAIN}/${filePath}`
-    : `https://${BUCKET_NAME}.s3.${
-        process.env.AWS_REGION || "us-east-1"
-      }.amazonaws.com/${filePath}`;
+    ? `${CLOUDFRONT_DOMAIN}/${filePath}`
+    : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${filePath}`;
 
   return {
     filePath,
-    fileName: fileName, // Return original filename instead of UUID
+    fileName, // Return original filename instead of UUID
     fileSize: fileBuffer.length,
     publicUrl,
   };
@@ -223,30 +336,72 @@ export async function uploadConvertedFile(
   originalFileName: string,
   targetFormat: string
 ): Promise<UploadResult> {
-  const fs = await import("fs").then((m) => m.promises);
-  const path = await import("path");
+  const fs = await import("fs");
+  const fileBuffer = fs.readFileSync(localFilePath);
 
-  const fileBuffer = await fs.readFile(localFilePath);
-  const baseName = path.parse(originalFileName).name;
-  const convertedFileName = `${baseName}_converted.${targetFormat}`;
-  const uniqueFileName = `${crypto.randomUUID()}_${convertedFileName}`;
+  const baseFileName = originalFileName.split(".")[0];
+  const convertedFileName = `${baseFileName}_converted.${targetFormat}`;
+  const uniqueFileName = `${crypto.randomUUID()}.${targetFormat}`;
   const filePath = `${userId}/converted/${uniqueFileName}`;
 
-  const s3File = s3Client.file(filePath);
-  await s3File.write(fileBuffer, {
-    type: getMimeType(targetFormat),
-  });
+  console.log(`📤 Uploading converted file: ${filePath}`);
 
-  // Generate public URL (CloudFront if available, otherwise S3)
+  const mimeType = getMimeType(targetFormat);
+  const maxRetries = 2;
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Upload attempt ${attempt}/${maxRetries}...`);
+      const uploadStartTime = Date.now();
+
+      if (useAwsSDK) {
+        const command = new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: filePath,
+          Body: fileBuffer,
+          ContentType: mimeType,
+        });
+
+        await s3Client.send(command);
+      } else {
+        const s3File = s3Client.file(filePath);
+        await s3File.write(fileBuffer, { type: mimeType });
+      }
+
+      const uploadDuration = Date.now() - uploadStartTime;
+      console.log(
+        `⏱️ Upload completed in ${uploadDuration}ms on attempt ${attempt}`
+      );
+      console.log(`✅ S3 upload successful: ${filePath}`);
+      break;
+    } catch (uploadError: any) {
+      lastError = uploadError;
+      console.error(`❌ S3 upload attempt ${attempt} failed:`, uploadError);
+
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      const delay = Math.min(500 * attempt, 2000);
+      console.log(`⏳ Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  if (lastError) {
+    console.error(`❌ All upload attempts failed for ${filePath}`);
+    throw lastError;
+  }
+
+  // Generate public URL
   const publicUrl = CLOUDFRONT_DOMAIN
-    ? `https://${CLOUDFRONT_DOMAIN}/${filePath}`
-    : `https://${BUCKET_NAME}.s3.${
-        process.env.AWS_REGION || "us-east-1"
-      }.amazonaws.com/${filePath}`;
+    ? `${CLOUDFRONT_DOMAIN}/${filePath}`
+    : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${filePath}`;
 
   return {
     filePath,
-    fileName: convertedFileName, // Return user-friendly filename instead of UUID
+    fileName: convertedFileName, // Return descriptive filename
     fileSize: fileBuffer.length,
     publicUrl,
   };
@@ -256,179 +411,190 @@ export async function createSignedDownloadUrl(
   filePath: string,
   expiresIn: number = 300 // 5 minutes default
 ): Promise<SignedUrlResult> {
-  const s3File = s3Client.file(filePath);
-  const signedUrl = s3File.presign({
-    expiresIn,
-    method: "GET",
-  });
+  console.log(`🔗 Creating signed download URL for: ${filePath}`);
 
-  return {
-    signedUrl,
-    expiresIn,
-  };
+  if (useAwsSDK) {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: filePath,
+    });
+
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
+
+    return {
+      signedUrl,
+      expiresIn,
+    };
+  } else {
+    const s3File = s3Client.file(filePath);
+    const signedUrl = s3File.presign({
+      expiresIn,
+      method: "GET",
+    });
+
+    return {
+      signedUrl,
+      expiresIn,
+    };
+  }
 }
 
 export async function downloadFile(filePath: string): Promise<Buffer> {
-  const maxRetries = 5;
-  const baseDelay = 1000; // 1 second
+  console.log(`📥 Downloading file: ${filePath}`);
+
+  const maxRetries = 3;
+  let lastError: any;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const s3File = s3Client.file(filePath);
-      const arrayBuffer = await s3File.arrayBuffer();
+      console.log(`🔄 Download attempt ${attempt}/${maxRetries}...`);
 
-      console.log(`✅ S3 download successful on attempt ${attempt}`);
-      return Buffer.from(arrayBuffer);
-    } catch (error: any) {
-      const isRetryableError =
-        error.name === "NoSuchKey" ||
-        error.name === "NotFound" ||
-        error.message?.includes("timeout");
+      let fileBuffer: Buffer;
 
-      if (attempt === maxRetries || !isRetryableError) {
-        console.error(`❌ S3 download failed after ${attempt} attempts:`, {
-          error: error.message,
-          filePath,
-          errorName: error.name,
-          attempt,
+      if (useAwsSDK) {
+        const command = new GetObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: filePath,
         });
-        throw error;
+
+        const response = await s3Client.send(command);
+        const chunks: Buffer[] = [];
+
+        for await (const chunk of response.Body as any) {
+          chunks.push(chunk);
+        }
+
+        fileBuffer = Buffer.concat(chunks);
+      } else {
+        const s3File = s3Client.file(filePath);
+        const arrayBuffer = await s3File.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
       }
 
-      const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
-      console.warn(
-        `⚠️ S3 download attempt ${attempt} failed, retrying in ${delay}ms:`,
-        {
-          error: error.message,
-          filePath,
-          nextAttempt: attempt + 1,
-        }
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-
-  throw new Error("This should never be reached");
-}
-
-export async function checkFileExists(filePath: string): Promise<boolean> {
-  const maxRetries = 5;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
       console.log(
-        `🔍 Checking file existence (attempt ${attempt}/${maxRetries}): ${filePath}`
+        `✅ File downloaded successfully: ${filePath} (${fileBuffer.length} bytes)`
       );
-
-      const s3File = s3Client.file(filePath);
-      const exists = await s3File.exists();
-
-      console.log(
-        `✅ File exists check successful (attempt ${attempt}): ${
-          exists ? "exists" : "not found"
-        }`
-      );
-      return exists;
-    } catch (error: any) {
-      console.error(`❌ File exists check error (attempt ${attempt}):`, {
-        filePath,
-        bucket: BUCKET_NAME,
-        errorName: error.name,
-        errorMessage: error.message,
+      return fileBuffer;
+    } catch (downloadError: any) {
+      lastError = downloadError;
+      console.error(`❌ Download attempt ${attempt} failed:`, {
+        error: downloadError.message,
+        name: downloadError.name,
         attempt,
       });
 
-      // Check if this is a retryable error
-      const isRetryableError =
-        error.message?.includes("timeout") ||
-        error.message?.includes("interrupted") ||
-        error.name === "TimeoutError" ||
-        error.name === "NetworkingError";
-
-      if (attempt === maxRetries || !isRetryableError) {
-        console.warn(
-          `⚠️ File existence check failed after ${attempt} attempts, treating as not found:`,
-          {
-            error: error.message,
-            filePath,
-          }
-        );
-        return false;
+      if (attempt === maxRetries) {
+        break;
       }
 
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-      console.log(`⏳ Retrying file existence check in ${delay}ms...`);
+      const delay = Math.min(1000 * attempt, 3000);
+      console.log(`⏳ Retrying in ${delay}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
-  return false;
+  console.error(`❌ All download attempts failed for ${filePath}`);
+  throw lastError;
+}
+
+export async function checkFileExists(filePath: string): Promise<boolean> {
+  try {
+    if (useAwsSDK) {
+      const command = new HeadObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: filePath,
+      });
+
+      await s3Client.send(command);
+      return true;
+    } else {
+      const s3File = s3Client.file(filePath);
+      return await s3File.exists();
+    }
+  } catch (error: any) {
+    if (
+      useAwsSDK &&
+      (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404)
+    ) {
+      return false;
+    } else if (!useAwsSDK) {
+      return false;
+    }
+
+    console.error("Error checking file existence:", error);
+    throw error;
+  }
 }
 
 export async function deleteFile(filePath: string): Promise<void> {
-  const s3File = s3Client.file(filePath);
-  await s3File.delete();
+  console.log(`🗑️ Deleting file: ${filePath}`);
+
+  if (useAwsSDK) {
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: filePath,
+    });
+
+    await s3Client.send(command);
+  } else {
+    const s3File = s3Client.file(filePath);
+    await s3File.delete();
+  }
+
+  console.log(`✅ File deleted successfully: ${filePath}`);
 }
 
 export async function deleteFiles(filePaths: string[]): Promise<void> {
-  if (filePaths.length === 0) return;
+  console.log(`🗑️ Deleting ${filePaths.length} files...`);
 
-  // Delete files in parallel using Promise.all
-  await Promise.all(
-    filePaths.map(async (filePath) => {
-      const s3File = s3Client.file(filePath);
-      await s3File.delete();
-    })
-  );
+  const deletePromises = filePaths.map((filePath) => deleteFile(filePath));
+  await Promise.all(deletePromises);
+
+  console.log(`✅ All ${filePaths.length} files deleted successfully`);
 }
 
 export function scheduleFileCleanup(
   filePaths: string[],
   delayMs: number = 5 * 60 * 1000
 ): void {
+  console.log(
+    `⏰ Scheduling cleanup of ${filePaths.length} files in ${
+      delayMs / 1000
+    } seconds`
+  );
+
   setTimeout(async () => {
     try {
       await deleteFiles(filePaths);
-      console.log(`Cleaned up ${filePaths.length} files:`, filePaths);
     } catch (error) {
-      console.error("Failed to cleanup files:", error);
+      console.error("❌ Error during scheduled file cleanup:", error);
     }
   }, delayMs);
 }
 
 function getMimeType(extension: string): string {
   const mimeTypes: Record<string, string> = {
+    // Video
+    mp4: "video/mp4",
+    webm: "video/webm",
+    avi: "video/x-msvideo",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    // Audio
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    flac: "audio/flac",
+    aac: "audio/aac",
+    ogg: "audio/ogg",
+    // Image
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
     png: "image/png",
-    webp: "image/webp",
     gif: "image/gif",
-    bmp: "image/bmp",
-    tiff: "image/tiff",
-    svg: "image/svg+xml",
-    heic: "image/heic",
-    heif: "image/heif",
-
-    mp4: "video/mp4",
-    webm: "video/webm",
-    avi: "video/avi",
-    mov: "video/quicktime",
-    mkv: "video/x-matroska",
-    wmv: "video/x-ms-wmv",
-    flv: "video/x-flv",
-    m4v: "video/x-m4v",
-    "3gp": "video/3gpp",
-
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    ogg: "audio/ogg",
-    m4a: "audio/m4a",
-    aac: "audio/aac",
-    flac: "audio/flac",
-    wma: "audio/x-ms-wma",
-    opus: "audio/opus",
+    webp: "image/webp",
+    // Default
+    default: "application/octet-stream",
   };
 
-  return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
+  return mimeTypes[extension.toLowerCase()] || mimeTypes.default;
 }
