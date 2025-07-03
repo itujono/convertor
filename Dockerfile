@@ -12,7 +12,7 @@ COPY packages/backend/package.json ./packages/backend/
 COPY packages/db/package.json ./packages/db/
 
 # Install all dependencies (including workspace dependencies)
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy the entire backend source
 COPY packages/backend ./packages/backend
