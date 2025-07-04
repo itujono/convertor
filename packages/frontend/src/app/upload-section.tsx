@@ -12,6 +12,7 @@ import { PricingModal } from "@/components/pricing-modal";
 
 export default function UploadSection() {
   const { session, isLoading, signInWithGoogle, user } = useAuth();
+  const [isPricingModalOpen, setIsPricingModalOpen] = React.useState(false);
 
   // Emergency fallback - if loading takes too long, show error state
   const [showFallback, setShowFallback] = React.useState(false);
@@ -92,9 +93,12 @@ export default function UploadSection() {
             {user?.plan === "free" && (
               <span className="block sm:inline mt-1 sm:mt-0">
                 Free for files up to {AppSettings.plans.free.maxFileSizeMB}MB.{" "}
-                <PricingModal>
-                  <button className="text-sm hover:text-primary/80 hover:underline text-primary">Upgrade</button>
-                </PricingModal>{" "}
+                <button
+                  onClick={() => setIsPricingModalOpen(true)}
+                  className="text-sm hover:text-primary/80 hover:underline text-primary"
+                >
+                  Upgrade
+                </button>{" "}
                 to get more.
               </span>
             )}
@@ -103,6 +107,8 @@ export default function UploadSection() {
       </div>
 
       {session && <ReadyDownloads />}
+
+      <PricingModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
     </div>
   );
 }

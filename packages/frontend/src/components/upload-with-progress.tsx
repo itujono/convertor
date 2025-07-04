@@ -33,6 +33,7 @@ import { toast } from "sonner";
 export default function UploadWithProgress() {
   const { planLimits, shouldShowUpgrade } = useAppSettings();
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const { isOnline, checkConnectivity } = useOnlineDetector();
 
   const {
@@ -295,9 +296,12 @@ export default function UploadWithProgress() {
   };
 
   const UpgradeButton = () => (
-    <PricingModal>
-      <button className="text-sm hover:text-primary/80 hover:underline text-primary">Upgrade?</button>
-    </PricingModal>
+    <button
+      onClick={() => setIsPricingModalOpen(true)}
+      className="text-sm hover:text-primary/80 hover:underline text-primary"
+    >
+      Upgrade?
+    </button>
   );
 
   return (
@@ -536,6 +540,9 @@ export default function UploadWithProgress() {
           )}
         </div>
       </div>
+
+      {/* Pricing Modal */}
+      <PricingModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
     </div>
   );
 }

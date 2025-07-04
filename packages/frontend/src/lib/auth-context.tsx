@@ -132,14 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Safety timeout to prevent infinite loading
-    const safetyTimeout = setTimeout(() => {
-      console.warn("⚠️ Auth initialization taking too long, forcing loading to false");
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    }, 30000); // 30 seconds
-
     const handleAuthChange = async (event: string, session: Session | null) => {
       if (!isMounted) return;
 
@@ -213,7 +205,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (isMounted) {
         setIsLoading(false);
-        clearTimeout(safetyTimeout);
       }
     };
 
@@ -271,7 +262,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
     };
   }, []);
 

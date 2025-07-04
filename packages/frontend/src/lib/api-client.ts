@@ -361,6 +361,13 @@ export class ApiClient {
     return this.request("/api/subscription");
   }
 
+  async createCheckoutSession(plan: "monthly" | "yearly") {
+    return this.request("/api/subscription/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    });
+  }
+
   async healthCheck() {
     return this.request("/api/health");
   }

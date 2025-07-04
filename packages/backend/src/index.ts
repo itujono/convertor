@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authMiddleware } from "./middleware/auth";
+// Initialize LemonSqueezy SDK
+import "./config/lemonsqueezy";
 import { getUserHandler } from "./handlers/user";
 import { uploadHandler } from "./handlers/upload";
 import { uploadStatusHandler } from "./handlers/upload-status";
