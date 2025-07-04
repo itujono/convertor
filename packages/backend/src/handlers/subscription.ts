@@ -114,7 +114,7 @@ export async function handlePaymentWebhook(c: Context) {
       return c.json({ error: "No signature" }, 400);
     }
 
-    const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
+    const webhookSecret = LEMONSQUEEZY_CONFIG.webhookSecret;
     if (!webhookSecret) {
       console.error("LEMONSQUEEZY_WEBHOOK_SECRET not configured");
       return c.json({ error: "Webhook secret not configured" }, 500);

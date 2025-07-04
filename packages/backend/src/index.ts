@@ -89,7 +89,6 @@ app.use(
   })
 );
 
-// TODO: Future payment integration
 app.post("/webhooks/payment", handlePaymentWebhook);
 
 // Debug endpoint to test subscription creation locally
@@ -159,45 +158,40 @@ app.post("/api/debug/simulate-subscription", authMiddleware, async (c) => {
   }
 });
 
-app.get("/api/debug/cors", async (c) => {
-  const corsOrigins = [
-    "https://www.useconvertor.com",
-    "https://useconvertor.com",
-    "https://convertor-staging.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
-  ];
+// app.get("/api/debug/cors", async (c) => {
+//   const corsOrigins = [
+//     "https://www.useconvertor.com",
+//     "https://useconvertor.com",
+//     "https://convertor-staging.vercel.app",
+//     "http://localhost:3000",
+//     "http://localhost:3001",
+//     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+//   ];
 
-  const requestOrigin = c.req.header("origin");
+//   const requestOrigin = c.req.header("origin");
 
-  return c.json({
-    corsOrigins,
-    frontendUrl: process.env.FRONTEND_URL,
-    nodeEnv: process.env.NODE_ENV,
-    requestOrigin,
-    isOriginAllowed: requestOrigin ? corsOrigins.includes(requestOrigin) : true,
-    railwayUrl:
-      process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_DOMAIN || "not-set",
-    allEnvVars: {
-      RAILWAY_STATIC_URL: process.env.RAILWAY_STATIC_URL,
-      RAILWAY_DOMAIN: process.env.RAILWAY_DOMAIN,
-      FRONTEND_URL: process.env.FRONTEND_URL,
-      NODE_ENV: process.env.NODE_ENV,
-    },
-    requestHeaders: {
-      origin: c.req.header("origin"),
-      referer: c.req.header("referer"),
-      host: c.req.header("host"),
-      userAgent: c.req.header("user-agent"),
-    },
-  });
-});
-
-app.options("/api/debug/test-options", async (c) => {
-  console.log("🧪 Test OPTIONS endpoint hit");
-  return c.json({ message: "OPTIONS test successful" });
-});
+//   return c.json({
+//     corsOrigins,
+//     frontendUrl: process.env.FRONTEND_URL,
+//     nodeEnv: process.env.NODE_ENV,
+//     requestOrigin,
+//     isOriginAllowed: requestOrigin ? corsOrigins.includes(requestOrigin) : true,
+//     railwayUrl:
+//       process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_DOMAIN || "not-set",
+//     allEnvVars: {
+//       RAILWAY_STATIC_URL: process.env.RAILWAY_STATIC_URL,
+//       RAILWAY_DOMAIN: process.env.RAILWAY_DOMAIN,
+//       FRONTEND_URL: process.env.FRONTEND_URL,
+//       NODE_ENV: process.env.NODE_ENV,
+//     },
+//     requestHeaders: {
+//       origin: c.req.header("origin"),
+//       referer: c.req.header("referer"),
+//       host: c.req.header("host"),
+//       userAgent: c.req.header("user-agent"),
+//     },
+//   });
+// });
 
 app.get("/api/debug/conversion-setup", async (c) => {
   try {
