@@ -41,9 +41,12 @@ const app = new Hono<{ Variables: Variables }>();
 
 app.use("*", async (c, next) => {
   if (c.req.path.includes("/upload") || c.req.path.includes("/convert")) {
-    const timeoutId = setTimeout(() => {
-      console.log("Request timeout for:", c.req.path);
-    }, 10 * 60 * 1000);
+    const timeoutId = setTimeout(
+      () => {
+        console.log("Request timeout for:", c.req.path);
+      },
+      10 * 60 * 1000
+    );
 
     await next();
     clearTimeout(timeoutId);
@@ -62,6 +65,7 @@ app.use(
         "https://convertor-staging.vercel.app",
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:5173",
         ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
       ];
 

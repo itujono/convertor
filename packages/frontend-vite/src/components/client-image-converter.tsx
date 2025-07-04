@@ -5,10 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DownloadIcon, AlertCircleIcon, ZapIcon, UploadIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useClientImageConverter, formatFileSize } from "@/hooks/use-client-image-converter";
-import { FileFormatSelector, FileQualitySelector, FileIcon } from "@/components/file-list";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DownloadIcon,
+  AlertCircleIcon,
+  ZapIcon,
+  UploadIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
+import {
+  useClientImageConverter,
+  formatFileSize,
+} from "@/hooks/use-client-image-converter";
+import {
+  FileFormatSelector,
+  FileQualitySelector,
+  FileIcon,
+} from "@/components/file-list";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +58,9 @@ function ImageQuickPreview({ file }: { file: FileWithPreview }) {
       </DialogTrigger>
       <DialogContent className="max-w-screen-md p-0 pt-8">
         <DialogHeader>
-          <DialogTitle className="sr-only">{file.file instanceof File ? file.file.name : file.file.name}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {file.file instanceof File ? file.file.name : file.file.name}
+          </DialogTitle>
         </DialogHeader>
         <img
           width={260}
@@ -99,7 +121,9 @@ export function ClientImageConverter({
     }
 
     if (clientSideFiles.length > remaining.daily) {
-      console.warn(`Attempting to convert ${clientSideFiles.length} files but only ${remaining.daily} remaining`);
+      console.warn(
+        `Attempting to convert ${clientSideFiles.length} files but only ${remaining.daily} remaining`
+      );
     }
 
     await convertFiles(clientSideFiles, selectedFormats, selectedQualities);
@@ -116,7 +140,9 @@ export function ClientImageConverter({
 
   // Create ZIP download with all converted files
   const downloadAllAsZip = async () => {
-    const completedConversions = conversions.filter((c) => c.completed && c.result);
+    const completedConversions = conversions.filter(
+      (c) => c.completed && c.result
+    );
 
     if (completedConversions.length === 0) return;
 
@@ -166,12 +192,28 @@ export function ClientImageConverter({
           <span className="text-sm text-muted-foreground">Fast & Private</span>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onOpenFileDialog} className="flex-1 sm:flex-none">
-            <UploadIcon className="-ms-0.5 size-3.5 opacity-60" aria-hidden="true" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenFileDialog}
+            className="flex-1 sm:flex-none"
+          >
+            <UploadIcon
+              className="-ms-0.5 size-3.5 opacity-60"
+              aria-hidden="true"
+            />
             Add files
           </Button>
-          <Button variant="outline" size="sm" onClick={handleClearAndReset} className="flex-1 sm:flex-none">
-            <Trash2Icon className="-ms-0.5 size-3.5 opacity-60" aria-hidden="true" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearAndReset}
+            className="flex-1 sm:flex-none"
+          >
+            <Trash2Icon
+              className="-ms-0.5 size-3.5 opacity-60"
+              aria-hidden="true"
+            />
             Remove all
           </Button>
         </div>
@@ -183,7 +225,9 @@ export function ClientImageConverter({
           const selectedFormat = selectedFormats[file.id] || "";
           const selectedQuality = selectedQualities[file.id] || "medium";
 
-          const isImage = (file.file instanceof File ? file.file.type : file.file.type).startsWith("image/");
+          const isImage = (
+            file.file instanceof File ? file.file.type : file.file.type
+          ).startsWith("image/");
           const isProcessing = conversion?.converting;
           const isCompleted = conversion?.completed;
 
@@ -192,37 +236,53 @@ export function ClientImageConverter({
               key={file.id}
               className={cn(
                 "border-input flex w-full items-center gap-3 rounded-lg border p-3",
-                isCompleted && "bg-green-50/50 border-green-200",
+                isCompleted && "bg-green-50/50 border-green-200"
               )}
             >
               <div className="flex items-center gap-3 flex-1">
                 <div
                   className={cn(
                     "flex size-10 items-center justify-center rounded border-2 border-dashed shrink-0",
-                    isImage ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50",
+                    isImage
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-gray-200 bg-gray-50"
                   )}
                 >
-                  {isImage && file.preview ? <ImageQuickPreview file={file} /> : <FileIcon file={file} />}
+                  {isImage && file.preview ? (
+                    <ImageQuickPreview file={file} />
+                  ) : (
+                    <FileIcon file={file} />
+                  )}
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <p className="truncate text-[13px] font-medium">
-                    {file.file instanceof File ? file.file.name : file.file.name}
+                    {file.file instanceof File
+                      ? file.file.name
+                      : file.file.name}
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {formatFileSize(file.file instanceof File ? file.file.size : file.file.size)}
+                    {formatFileSize(
+                      file.file instanceof File
+                        ? file.file.size
+                        : file.file.size
+                    )}
                     {conversion?.result && (
                       <>
                         {" → "}
                         {formatFileSize(conversion.result.convertedSize)}
                         {conversion.result.compressionRatio > 0 ? (
-                          <span className="text-green-600 ml-1">(-{conversion.result.compressionRatio}%)</span>
+                          <span className="text-green-600 ml-1">
+                            (-{conversion.result.compressionRatio}%)
+                          </span>
                         ) : conversion.result.compressionRatio < 0 ? (
                           <span className="text-orange-600 ml-1">
                             (+{Math.abs(conversion.result.compressionRatio)}%)
                           </span>
                         ) : (
-                          <span className="text-gray-600 ml-1">(same size)</span>
+                          <span className="text-gray-600 ml-1">
+                            (same size)
+                          </span>
                         )}
                       </>
                     )}
@@ -258,7 +318,11 @@ export function ClientImageConverter({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 w-full sm:w-auto">
                   <div className="flex gap-2 flex-1 sm:flex-none">
                     <FileFormatSelector
-                      fileType={file.file instanceof File ? file.file.type : file.file.type}
+                      fileType={
+                        file.file instanceof File
+                          ? file.file.type
+                          : file.file.type
+                      }
                       fileId={file.id}
                       sourceFile={file.file}
                       selectedFormat={selectedFormat}
@@ -285,12 +349,19 @@ export function ClientImageConverter({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Progress value={conversion?.progress || 0} className="w-20" />
-                  <span className="text-xs text-muted-foreground">{Math.round(conversion?.progress || 0)}%</span>
+                  <Progress
+                    value={conversion?.progress || 0}
+                    className="w-20"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {Math.round(conversion?.progress || 0)}%
+                  </span>
                   {conversion?.saving && (
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 border border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs text-blue-600">Backing up...</span>
+                      <span className="text-xs text-blue-600">
+                        Backing up...
+                      </span>
                     </div>
                   )}
                   {conversion?.savedToServer && (
@@ -299,7 +370,9 @@ export function ClientImageConverter({
                       <span className="text-xs text-green-600">Backed up</span>
                     </div>
                   )}
-                  {conversion?.error && <AlertCircleIcon className="w-4 h-4 text-red-600" />}
+                  {conversion?.error && (
+                    <AlertCircleIcon className="w-4 h-4 text-red-600" />
+                  )}
                 </div>
               )}
             </div>
@@ -311,7 +384,11 @@ export function ClientImageConverter({
         {areAllConversionsComplete && hasCompletedConversions ? (
           <div className="flex flex-col items-center gap-2">
             <div className="flex gap-2">
-              <Button onClick={downloadAllAsZip} className="px-6" disabled={isDownloadingZip}>
+              <Button
+                onClick={downloadAllAsZip}
+                className="px-6"
+                disabled={isDownloadingZip}
+              >
                 <DownloadIcon className="w-4 h-4 mr-2" />
                 {isDownloadingZip ? "Creating ZIP..." : "Download all as ZIP"}
               </Button>
@@ -320,7 +397,8 @@ export function ClientImageConverter({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              All conversions completed instantly! Downloads ready now, server backup in progress.
+              All conversions completed instantly! Downloads ready now, server
+              backup in progress.
             </p>
           </div>
         ) : hasActiveConversions ? (
@@ -329,7 +407,9 @@ export function ClientImageConverter({
               <ZapIcon className="w-4 h-4 mr-2 animate-pulse" />
               Converting...
             </Button>
-            <p className="text-xs text-muted-foreground">Processing files locally...</p>
+            <p className="text-xs text-muted-foreground">
+              Processing files locally...
+            </p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
@@ -337,13 +417,15 @@ export function ClientImageConverter({
               onClick={handleStartConversion}
               size="lg"
               className="px-8"
-              disabled={user && getRemainingConversions().daily === 0}
+              disabled={user ? getRemainingConversions().daily === 0 : false}
             >
               <ZapIcon className="w-4 h-4 mr-2" />
               Convert Instantly
             </Button>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">Fast client-side conversion + automatic server backup!</p>
+              <p className="text-xs text-muted-foreground">
+                Fast client-side conversion + automatic server backup!
+              </p>
               {user && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {getRemainingConversions().daily} conversions remaining today

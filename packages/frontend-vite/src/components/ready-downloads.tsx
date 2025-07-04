@@ -19,7 +19,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +37,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiClient, type UserFile, type UserFilesResponse } from "@/lib/api-client";
+import {
+  useUserFiles,
+  useDeleteUserFile,
+  useDownloadZip,
+  type UserFile,
+} from "@/lib/api-hooks";
 import { formatBytes } from "@/hooks/use-file-upload";
 import { useAuth } from "@/lib/auth-context";
 
@@ -46,7 +57,12 @@ function isUrlLikelyExpired(url: string): boolean {
 
     if (expires && date) {
       const expirySeconds = parseInt(expires);
-      const urlDate = new Date(date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, "$1-$2-$3T$4:$5:$6Z"));
+      const urlDate = new Date(
+        date.replace(
+          /(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/,
+          "$1-$2-$3T$4:$5:$6Z"
+        )
+      );
       const expiryTime = urlDate.getTime() + expirySeconds * 1000;
       const timeUntilExpiry = expiryTime - Date.now();
 
@@ -54,18 +70,27 @@ function isUrlLikelyExpired(url: string): boolean {
     }
 
     return true;
-  } catch (e) {
+  } catch {
     return true;
   }
 }
 
 function ImagePreview({ file }: { file: UserFile }) {
   const [imageError, setImageError] = useState(false);
-  const isImage = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
-    file.converted_format.toLowerCase(),
-  );
+  const isImage = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "bmp",
+    "tiff",
+    "svg",
+  ].includes(file.converted_format.toLowerCase());
 
-  const urlExpired = file.download_url ? isUrlLikelyExpired(file.download_url) : true;
+  const urlExpired = file.download_url
+    ? isUrlLikelyExpired(file.download_url)
+    : true;
 
   if (!isImage || !file.download_url || imageError || urlExpired) {
     const FileIcon = getIconForFormat(file.converted_format);
@@ -86,7 +111,9 @@ function ImagePreview({ file }: { file: UserFile }) {
       </DialogTrigger>
       <DialogContent className="max-w-screen-md p-0 pt-8">
         <DialogHeader>
-          <DialogTitle className="sr-only">{file.original_file_name}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {file.original_file_name}
+          </DialogTitle>
         </DialogHeader>
         <img
           width={800}
@@ -104,7 +131,11 @@ function ImagePreview({ file }: { file: UserFile }) {
 const getIconForFormat = (format: string) => {
   const lowerFormat = format.toLowerCase();
 
-  if (["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(lowerFormat)) {
+  if (
+    ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"].includes(
+      lowerFormat
+    )
+  ) {
     return ImageIcon;
   }
 
@@ -165,136 +196,37 @@ function FileCardSkeleton() {
 }
 
 export function ReadyDownloads() {
-  const [userFiles, setUserFiles] = useState<UserFile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
-  const [zipDownloadMessage, setZipDownloadMessage] = useState("Creating ZIP...");
-  const [error, setError] = useState<string | null>(null);
+  const [zipDownloadMessage, setZipDownloadMessage] =
+    useState("Creating ZIP...");
   const [fileToDelete, setFileToDelete] = useState<UserFile | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const zipMessageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
 
-  const fetchUserFiles = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response: UserFilesResponse = await apiClient.getUserFiles();
+  // Use our new hooks - so much cleaner! 🎉
+  const {
+    data: userFilesData,
+    isLoading: loading,
+    error,
+    refetch,
+    isRefetching: refreshing,
+  } = useUserFiles();
 
-      // Don't update state if request was cancelled
-      if (response.cancelled) {
-        return;
-      }
+  const deleteFile = useDeleteUserFile();
+  const downloadZip = useDownloadZip();
 
-      setUserFiles(response.files);
-      setError(null);
-      setLastRefreshTime(Date.now());
-    } catch (err) {
-      console.error("Failed to fetch user files:", err);
-      setError("Failed to load your files");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const userFiles = userFilesData?.files || [];
 
   const handleRefresh = useCallback(async () => {
-    // Prevent too frequent refreshes (minimum 10 seconds between refreshes)
-    const now = Date.now();
-    if (now - lastRefreshTime < 10000) {
-      return;
-    }
-
-    try {
-      setRefreshing(true);
-      const response: UserFilesResponse = await apiClient.getUserFiles();
-
-      // Don't update state if request was cancelled
-      if (response.cancelled) {
-        return;
-      }
-
-      setUserFiles(response.files);
-      setError(null);
-      setLastRefreshTime(now);
-    } catch (err) {
-      console.error("Failed to refresh user files:", err);
-      setError("Failed to refresh files");
-    } finally {
-      setRefreshing(false);
-    }
-  }, [lastRefreshTime]);
-
-  useEffect(() => {
-    if (user) {
-      fetchUserFiles();
-    }
-
-    return () => {
-      apiClient.cancelGetUserFiles();
-    };
-  }, [user, fetchUserFiles]);
-
-  useEffect(() => {
-    if (!user || userFiles.length === 0) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
-    }
-
-    const hasExpiringUrls = userFiles.some((file) => {
-      if (!file.download_url) return false;
-
-      try {
-        const url = new URL(file.download_url);
-        const expires = url.searchParams.get("X-Amz-Expires");
-        const date = url.searchParams.get("X-Amz-Date");
-
-        if (expires && date) {
-          const expirySeconds = parseInt(expires);
-          const urlDate = new Date(date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, "$1-$2-$3T$4:$5:$6Z"));
-          const expiryTime = urlDate.getTime() + expirySeconds * 1000;
-          const timeUntilExpiry = expiryTime - Date.now();
-
-          return timeUntilExpiry < 2 * 60 * 1000;
-        }
-      } catch (e) {
-        return true;
-      }
-
-      return false;
-    });
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
-    const refreshInterval = hasExpiringUrls ? 60000 : 120000; // 1 minute if expiring, 2 minutes otherwise
-
-    intervalRef.current = setInterval(() => {
-      handleRefresh();
-    }, refreshInterval);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [user, userFiles, handleRefresh]);
+    refetch();
+  }, [refetch]);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
       if (zipMessageTimeoutRef.current) {
         clearTimeout(zipMessageTimeoutRef.current);
       }
-      apiClient.cancelGetUserFiles();
     };
   }, []);
 
@@ -316,9 +248,8 @@ export function ReadyDownloads() {
     if (!fileToDelete) return;
 
     try {
-      await apiClient.deleteUserFile(fileToDelete.id);
+      await deleteFile.mutateAsync(fileToDelete.id);
       setFileToDelete(null);
-      fetchUserFiles();
 
       // Reset to page 1 if current page becomes empty after deletion
       const totalPages = Math.ceil((userFiles.length - 1) / FILES_PER_PAGE);
@@ -340,13 +271,18 @@ export function ReadyDownloads() {
       }, TIME_FOR_NEW_ZIP_MESSAGE);
 
       const filePaths = userFiles
-        .filter((file) => file.download_url && file.file_path.includes("/converted/"))
+        .filter(
+          (file) => file.download_url && file.file_path.includes("/converted/")
+        )
         .map((file) => file.file_path);
 
-      console.log(`📦 Attempting to download ${filePaths.length} converted files:`, filePaths);
+      console.log(
+        `📦 Attempting to download ${filePaths.length} converted files:`,
+        filePaths
+      );
 
       if (filePaths.length > 0) {
-        await apiClient.downloadZip(filePaths);
+        await downloadZip.mutateAsync(filePaths);
         console.log("✅ Zip download completed successfully");
       } else {
         console.warn("⚠️ No converted files found for zip download");
@@ -356,10 +292,17 @@ export function ReadyDownloads() {
       console.error("Failed to download zip:", err);
 
       // Show user-friendly error message
-      if (err instanceof Error && err.message.includes("No converted files available")) {
-        alert("No converted files are available for download. Please convert some files first.");
+      if (
+        err instanceof Error &&
+        err.message.includes("No converted files available")
+      ) {
+        alert(
+          "No converted files are available for download. Please convert some files first."
+        );
       } else {
-        alert("Failed to create zip file. Please try again or download files individually.");
+        alert(
+          "Failed to create zip file. Please try again or download files individually."
+        );
       }
     } finally {
       setDownloadingZip(false);
@@ -426,7 +369,11 @@ export function ReadyDownloads() {
           </div>
           <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
             <p className="text-sm">
-              <TriangleAlert className="me-3 -mt-0.5 inline-flex text-amber-500" size={16} aria-hidden="true" />
+              <TriangleAlert
+                className="me-3 -mt-0.5 inline-flex text-amber-500"
+                size={16}
+                aria-hidden="true"
+              />
               Files are automatically removed after 24 hours
             </p>
           </div>
@@ -447,14 +394,26 @@ export function ReadyDownloads() {
       <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">Ready to Download</CardTitle>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-8 w-8 p-0">
-              <RefreshCwIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+            <CardTitle className="flex items-center gap-2">
+              Ready to Download
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCwIcon
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-destructive">{error}</div>
+          <div className="text-center py-8 text-destructive">
+            {error?.message || "Failed to load files"}
+          </div>
         </CardContent>
       </Card>
     );
@@ -466,13 +425,23 @@ export function ReadyDownloads() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Ready to Download</CardTitle>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-8 w-8 p-0">
-              <RefreshCwIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCwIcon
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">No files ready for download</div>
+          <div className="text-center py-8 text-muted-foreground">
+            No files ready for download
+          </div>
         </CardContent>
       </Card>
     );
@@ -492,7 +461,9 @@ export function ReadyDownloads() {
                 disabled={downloadingZip}
                 className="h-8 px-3 w-full sm:w-auto"
               >
-                <PackageIcon className={`size-3 mr-1 ${downloadingZip ? "animate-spin" : ""}`} />
+                <PackageIcon
+                  className={`size-3 mr-1 ${downloadingZip ? "animate-spin" : ""}`}
+                />
                 {downloadingZip ? zipDownloadMessage : "Download all as zip"}
               </Button>
             )}
@@ -503,13 +474,19 @@ export function ReadyDownloads() {
               disabled={refreshing}
               className="h-8 w-8 p-0 self-end sm:self-auto"
             >
-              <RefreshCwIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCwIcon
+                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+              />
             </Button>
           </div>
         </div>
         <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
           <p className="text-sm">
-            <TriangleAlert className="me-3 -mt-0.5 inline-flex text-amber-500" size={16} aria-hidden="true" />
+            <TriangleAlert
+              className="me-3 -mt-0.5 inline-flex text-amber-500"
+              size={16}
+              aria-hidden="true"
+            />
             Files are automatically removed after 24 hours
           </p>
         </div>
@@ -530,14 +507,20 @@ export function ReadyDownloads() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 mb-1">
-                      <p className="font-medium truncate text-sm">{file.original_file_name}</p>
-                      <Badge variant={expirationStatus.variant} className="text-xs w-fit">
+                      <p className="font-medium truncate text-sm">
+                        {file.original_file_name}
+                      </p>
+                      <Badge
+                        variant={expirationStatus.variant}
+                        className="text-xs w-fit"
+                      >
                         {expirationStatus.text}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap items-center gap-y-1 gap-x-4 sm:gap-x-2 text-xs text-muted-foreground">
                       <span>
-                        {file.original_format.toUpperCase()} → {file.converted_format.toUpperCase()}
+                        {file.original_format.toUpperCase()} →{" "}
+                        {file.converted_format.toUpperCase()}
                       </span>
                       <span className="hidden sm:inline">&middot;</span>
                       <span>{formatBytes(file.file_size)}</span>
@@ -547,7 +530,9 @@ export function ReadyDownloads() {
                         {formatTimeRemaining(file.time_remaining)} left
                       </span>
                       <span className="hidden sm:inline">&middot;</span>
-                      <span className="text-xs">{formatRelativeTime(file.created_at)}</span>
+                      <span className="text-xs">
+                        {formatRelativeTime(file.created_at)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -589,17 +574,19 @@ export function ReadyDownloads() {
             </Button>
 
             <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handlePageChange(page)}
-                  className="h-8 w-8 p-0"
-                >
-                  {page}
-                </Button>
-              ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(page)}
+                    className="h-8 w-8 p-0"
+                  >
+                    {page}
+                  </Button>
+                )
+              )}
             </div>
 
             <Button
@@ -614,23 +601,37 @@ export function ReadyDownloads() {
           </div>
         )}
       </CardContent>
-      <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && setFileToDelete(null)}>
+      <AlertDialog
+        open={!!fileToDelete}
+        onOpenChange={(open) => !open && setFileToDelete(null)}
+      >
         <AlertDialogContent>
           <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full border" aria-hidden="true">
-              <CircleAlertIcon className="opacity-80 text-destructive" size={16} />
+            <div
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border"
+              aria-hidden="true"
+            >
+              <CircleAlertIcon
+                className="opacity-80 text-destructive"
+                size={16}
+              />
             </div>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete file?</AlertDialogTitle>
               <AlertDialogDescription>
-                You haven&apos;t downloaded this file yet. Are you sure you want to delete{" "}
-                <strong>{fileToDelete?.original_file_name}</strong>? You won&apos;t be able to download it again.
+                You haven&apos;t downloaded this file yet. Are you sure you want
+                to delete <strong>{fileToDelete?.original_file_name}</strong>?
+                You won&apos;t be able to download it again.
               </AlertDialogDescription>
             </AlertDialogHeader>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setFileToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setFileToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete}>
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
