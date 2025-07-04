@@ -164,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log("✅ User data fetched successfully:", { userId: userData?.id, plan: userData?.plan });
           if (isMounted) {
             setUser(userData);
+            setIsLoading(false);
           }
         } catch (error) {
           console.error("❌ Error fetching user data after auth change:", error);
@@ -180,10 +181,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setSession(null);
               setUser(null);
               setGoogleUser(null);
+              setIsLoading(false);
             }
           } else {
             if (isMounted) {
               setUser(null);
+              setIsLoading(false);
             }
           }
         }
@@ -191,11 +194,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           setUser(null);
           setGoogleUser(null);
+          setIsLoading(false);
         }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
       }
     };
 
