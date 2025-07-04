@@ -49,7 +49,6 @@ export async function createCheckoutSession(
       `Creating checkout for user ${user.id}, plan: ${plan}, variant: ${variantId}`
     );
 
-    // Use the official LemonSqueezy SDK format
     const response = await createCheckout(
       LEMONSQUEEZY_CONFIG.storeId,
       variantId,
@@ -70,8 +69,8 @@ export async function createCheckoutSession(
 
     console.log("✅ Checkout created successfully:");
 
-    // The response structure is: response.data.data (nested data)
-    const checkoutData = (response as any).data?.data;
+    // Structure: response.data.data (nested data)
+    const checkoutData = response.data?.data;
     const checkoutUrl = checkoutData?.attributes?.url;
     const checkoutId = checkoutData?.id;
 
@@ -90,7 +89,6 @@ export async function cancelSubscription(c: Context<{ Variables: Variables }>) {
   return c.json({ error: "Payment integration not available" }, 501);
 }
 
-// LemonSqueezy webhook handler
 export async function handlePaymentWebhook(c: Context) {
   try {
     const body = await c.req.text();
@@ -101,14 +99,12 @@ export async function handlePaymentWebhook(c: Context) {
       return c.json({ error: "No signature" }, 400);
     }
 
-    // Verify webhook signature (you'll need to set this in your environment)
     const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
     if (!webhookSecret) {
       console.error("LEMONSQUEEZY_WEBHOOK_SECRET not configured");
       return c.json({ error: "Webhook secret not configured" }, 500);
     }
 
-    // Verify the signature
     const expectedSignature = crypto
       .createHmac("sha256", webhookSecret)
       .update(body)
@@ -161,7 +157,6 @@ async function handleSubscriptionChange(event: any) {
     const userId = customData.user_id;
     const status = subscription.attributes?.status;
 
-    // Map LemonSqueezy status to our plan
     let plan = "free";
     if (status === "active" || status === "trialing") {
       plan = "premium";
@@ -234,9 +229,6 @@ async function handleOrderCreated(event: any) {
       status: order.attributes?.status,
       total: order.attributes?.total_formatted,
     });
-
-    // For one-time purchases, you might want to upgrade the user immediately
-    // This depends on your business model
   } catch (error) {
     console.error("Error handling order creation:", error);
   }
