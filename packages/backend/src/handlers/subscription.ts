@@ -115,6 +115,13 @@ export async function handlePaymentWebhook(c: Context) {
     }
 
     const webhookSecret = LEMONSQUEEZY_CONFIG.webhookSecret;
+    console.log("🔍 Webhook debug:", {
+      hasWebhookSecret: !!webhookSecret,
+      webhookSecretLength: webhookSecret?.length,
+      configWebhookSecret: !!LEMONSQUEEZY_CONFIG.webhookSecret,
+      processEnvWebhookSecret: !!process.env.LEMON_SQUEEZY_WEBHOOK_SECRET,
+    });
+
     if (!webhookSecret) {
       console.error("LEMONSQUEEZY_WEBHOOK_SECRET not configured");
       return c.json({ error: "Webhook secret not configured" }, 500);
