@@ -170,13 +170,13 @@ export async function handlePaymentWebhook(c: Context) {
 async function handleSubscriptionChange(event: any) {
   try {
     const subscription = event.data;
-    const customData = subscription.attributes?.custom_data;
+    const customData = event.meta?.custom_data; // Custom data is in meta, not attributes
 
     console.log("🔍 Subscription change debug:", {
       subscriptionId: subscription.id,
       hasCustomData: !!customData,
       customData: customData,
-      attributes: subscription.attributes,
+      metaCustomData: event.meta?.custom_data,
     });
 
     if (!customData?.user_id) {
@@ -276,7 +276,7 @@ async function handleSubscriptionChange(event: any) {
 async function handleSubscriptionCancellation(event: any) {
   try {
     const subscription = event.data;
-    const customData = subscription.attributes?.custom_data;
+    const customData = event.meta?.custom_data; // Custom data is in meta, not attributes
 
     if (!customData?.user_id) {
       console.error("No user_id in subscription custom data");
@@ -329,7 +329,7 @@ async function handleSubscriptionCancellation(event: any) {
 async function handleOrderCreated(event: any) {
   try {
     const order = event.data;
-    const customData = order.attributes?.custom_data;
+    const customData = event.meta?.custom_data; // Custom data is in meta, not attributes
 
     if (!customData?.user_id) {
       console.error("No user_id in order custom data");
