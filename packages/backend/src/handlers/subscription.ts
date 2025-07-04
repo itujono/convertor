@@ -50,7 +50,7 @@ export async function createCheckoutSession(
     );
 
     // Get frontend URL from environment variable
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const frontendUrl = process.env.FRONTEND_URL;
 
     const response = await createCheckout(
       LEMONSQUEEZY_CONFIG.storeId,
@@ -139,6 +139,7 @@ export async function handlePaymentWebhook(c: Context) {
 
     const event = JSON.parse(body);
     console.log("LemonSqueezy webhook received:", event.meta?.event_name);
+    console.log("🔍 Webhook payload:", JSON.stringify(event, null, 2));
 
     switch (event.meta?.event_name) {
       case "subscription_created":
@@ -170,6 +171,13 @@ async function handleSubscriptionChange(event: any) {
   try {
     const subscription = event.data;
     const customData = subscription.attributes?.custom_data;
+
+    console.log("🔍 Subscription change debug:", {
+      subscriptionId: subscription.id,
+      hasCustomData: !!customData,
+      customData: customData,
+      attributes: subscription.attributes,
+    });
 
     if (!customData?.user_id) {
       console.error("No user_id in subscription custom data");
