@@ -17,6 +17,7 @@ interface PricingModalProps {
 
 export function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const { user } = useAuth();
   const premium = AppSettings.plans.premium;
 
@@ -32,6 +33,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
       const { checkoutUrl } = await apiClient.createCheckoutSession(plan);
 
       if (checkoutUrl) {
+        setIsRedirecting(true);
         window.location.href = checkoutUrl;
       } else {
         throw new Error("No checkout URL received");
@@ -39,10 +41,13 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
     } catch (error) {
       console.error("Checkout error:", error);
       toast.error("Failed to create checkout session. Please try again.");
-    } finally {
       setIsProcessing(false);
+      setIsRedirecting(false);
     }
   };
+
+  const isDisabled = !user || isProcessing || isRedirecting;
+  const buttonText = isRedirecting ? "Redirecting..." : isProcessing ? "Processing..." : "";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -64,8 +69,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                 </div>
               </div>
             </div>
-            <Button onClick={() => handleCheckout("monthly")} disabled={!user || isProcessing} className="w-36">
-              {isProcessing ? "Processing..." : "Get Monthly"} <ArrowRight className="w-4 h-4" />
+            <Button onClick={() => handleCheckout("monthly")} disabled={isDisabled} className="w-36">
+              {buttonText || "Get Monthly"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
 
@@ -95,8 +100,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                 </div>
               </div>
             </div>
-            <Button onClick={() => handleCheckout("yearly")} disabled={!user || isProcessing} className="w-36">
-              {isProcessing ? "Processing..." : "Get Yearly"} <ArrowRight className="w-4 h-4" />
+            <Button onClick={() => handleCheckout("yearly")} disabled={isDisabled} className="w-36">
+              {buttonText || "Get Yearly"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
         </div>

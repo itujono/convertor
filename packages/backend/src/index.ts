@@ -92,6 +92,73 @@ app.use(
 // TODO: Future payment integration
 app.post("/webhooks/payment", handlePaymentWebhook);
 
+// Debug endpoint to test subscription creation locally
+app.post("/api/debug/simulate-subscription", authMiddleware, async (c) => {
+  try {
+    const user = c.get("user");
+    const { plan = "monthly" } = await c.req.json();
+
+    // Simulate what the webhook would do
+    const mockSubscriptionId = `mock_${Date.now()}`;
+    const mockVariantId = plan === "monthly" ? "123456" : "789012";
+
+    console.log(
+      `🧪 Simulating subscription for user ${user.id}, plan: ${plan}`
+    );
+
+    // Create subscription record
+    const subscriptionData = {
+      user_id: user.id,
+      lemonsqueezy_subscription_id: mockSubscriptionId,
+      lemonsqueezy_variant_id: mockVariantId,
+      status: "active",
+      plan_type: plan,
+      provider: "lemonsqueezy",
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(
+        Date.now() + 30 * 24 * 60 * 60 * 1000
+      ).toISOString(), // 30 days
+      cancel_at_period_end: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: insertError } = await supabaseAdmin
+      .from("subscriptions")
+      .insert(subscriptionData);
+
+    if (insertError) {
+      console.error("Error creating subscription:", insertError);
+      return c.json({ error: insertError.message }, 500);
+    }
+
+    // Update user plan
+    const { error: userError } = await supabaseAdmin
+      .from("users")
+      .update({
+        plan: "premium",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
+
+    if (userError) {
+      console.error("Error updating user plan:", userError);
+      return c.json({ error: userError.message }, 500);
+    }
+
+    console.log(`✅ Debug: Created subscription and upgraded user to premium`);
+
+    return c.json({
+      success: true,
+      subscription: subscriptionData,
+      message: "Subscription simulated successfully",
+    });
+  } catch (error: any) {
+    console.error("Debug endpoint error:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 app.get("/api/debug/cors", async (c) => {
   const corsOrigins = [
     "https://www.useconvertor.com",

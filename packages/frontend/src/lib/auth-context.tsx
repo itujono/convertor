@@ -135,15 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleAuthChange = async (event: string, session: Session | null) => {
       if (!isMounted) return;
 
-      console.log(`🔐 Auth state change: ${event}`, {
-        hasSession: !!session,
-        sessionExpired: session?.expires_at ? session.expires_at * 1000 < Date.now() : false,
-        supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        supabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        apiUrl: process.env.NEXT_PUBLIC_API_URL,
-        siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
-      });
-
       setSession(session);
 
       const googleUserData = extractGoogleUserData(session);

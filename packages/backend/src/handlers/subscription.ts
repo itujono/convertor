@@ -49,6 +49,9 @@ export async function createCheckoutSession(
       `Creating checkout for user ${user.id}, plan: ${plan}, variant: ${variantId}`
     );
 
+    // Get frontend URL from environment variable
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+
     const response = await createCheckout(
       LEMONSQUEEZY_CONFIG.storeId,
       variantId,
@@ -59,6 +62,18 @@ export async function createCheckoutSession(
             plan: plan,
           },
         },
+        checkoutOptions: {
+          embed: false,
+          media: false,
+          logo: true,
+        },
+        productOptions: {
+          redirectUrl: `${frontendUrl}/?payment=success`,
+          receiptButtonText: "Go to App",
+          receiptThankYouNote:
+            "Thank you for upgrading! You can now enjoy unlimited conversions.",
+        },
+        expiresAt: null, // No expiration
       }
     );
 
@@ -156,15 +171,76 @@ async function handleSubscriptionChange(event: any) {
 
     const userId = customData.user_id;
     const status = subscription.attributes?.status;
+    const subscriptionId = subscription.id;
+    const variantId = subscription.attributes?.variant_id;
+    const planType = customData?.plan; // "monthly" or "yearly"
 
     let plan = "free";
     if (status === "active" || status === "trialing") {
       plan = "premium";
     }
 
-    console.log(`Updating user ${userId} to plan: ${plan}, status: ${status}`);
+    console.log(`Processing subscription change for user ${userId}:`, {
+      subscriptionId,
+      status,
+      planType,
+      variantId,
+    });
 
-    const { error } = await supabaseAdmin
+    // Update or create subscription record
+    const subscriptionData: any = {
+      user_id: userId,
+      lemonsqueezy_subscription_id: subscriptionId,
+      lemonsqueezy_variant_id: variantId?.toString(),
+      status: status,
+      plan_type: planType,
+      provider: "lemonsqueezy",
+      current_period_start: new Date(
+        subscription.attributes?.created_at || Date.now()
+      ).toISOString(),
+      current_period_end: subscription.attributes?.renews_at
+        ? new Date(subscription.attributes.renews_at).toISOString()
+        : null,
+      cancel_at_period_end: subscription.attributes?.cancelled || false,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Try to update existing subscription first
+    const { data: existingSubscription, error: selectError } =
+      await supabaseAdmin
+        .from("subscriptions")
+        .select("id")
+        .eq("lemonsqueezy_subscription_id", subscriptionId)
+        .single();
+
+    if (existingSubscription) {
+      // Update existing subscription
+      const { error: updateError } = await supabaseAdmin
+        .from("subscriptions")
+        .update(subscriptionData)
+        .eq("lemonsqueezy_subscription_id", subscriptionId);
+
+      if (updateError) {
+        console.error("Error updating subscription:", updateError);
+      } else {
+        console.log(`✅ Updated subscription ${subscriptionId}`);
+      }
+    } else {
+      // Create new subscription
+      subscriptionData.created_at = new Date().toISOString();
+      const { error: insertError } = await supabaseAdmin
+        .from("subscriptions")
+        .insert(subscriptionData);
+
+      if (insertError) {
+        console.error("Error creating subscription:", insertError);
+      } else {
+        console.log(`✅ Created new subscription ${subscriptionId}`);
+      }
+    }
+
+    // Update user plan
+    const { error: userError } = await supabaseAdmin
       .from("users")
       .update({
         plan,
@@ -172,10 +248,10 @@ async function handleSubscriptionChange(event: any) {
       })
       .eq("id", userId);
 
-    if (error) {
-      console.error("Error updating user subscription:", error);
+    if (userError) {
+      console.error("Error updating user plan:", userError);
     } else {
-      console.log(`Successfully updated user ${userId} subscription`);
+      console.log(`✅ Updated user ${userId} to plan: ${plan}`);
     }
   } catch (error) {
     console.error("Error handling subscription change:", error);
@@ -193,10 +269,31 @@ async function handleSubscriptionCancellation(event: any) {
     }
 
     const userId = customData.user_id;
+    const subscriptionId = subscription.id;
+    const status = subscription.attributes?.status;
 
-    console.log(`Downgrading user ${userId} to free plan`);
+    console.log(
+      `Processing subscription cancellation for user ${userId}, subscription ${subscriptionId}`
+    );
 
-    const { error } = await supabaseAdmin
+    // Update subscription record
+    const { error: subscriptionError } = await supabaseAdmin
+      .from("subscriptions")
+      .update({
+        status: status,
+        cancel_at_period_end: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("lemonsqueezy_subscription_id", subscriptionId);
+
+    if (subscriptionError) {
+      console.error("Error updating subscription:", subscriptionError);
+    } else {
+      console.log(`✅ Updated subscription ${subscriptionId} to cancelled`);
+    }
+
+    // Update user plan to free
+    const { error: userError } = await supabaseAdmin
       .from("users")
       .update({
         plan: "free",
@@ -204,10 +301,10 @@ async function handleSubscriptionCancellation(event: any) {
       })
       .eq("id", userId);
 
-    if (error) {
-      console.error("Error downgrading user:", error);
+    if (userError) {
+      console.error("Error downgrading user:", userError);
     } else {
-      console.log(`Successfully downgraded user ${userId}`);
+      console.log(`✅ Downgraded user ${userId} to free plan`);
     }
   } catch (error) {
     console.error("Error handling subscription cancellation:", error);

@@ -41,6 +41,22 @@ export interface UserFile {
   last_downloaded_at?: string;
 }
 
+export interface Subscription {
+  id: string;
+  user_id: string;
+  lemonsqueezy_subscription_id: string;
+  lemonsqueezy_customer_id?: string;
+  lemonsqueezy_variant_id?: string;
+  plan_type?: string;
+  provider: "lemonsqueezy";
+  status: string;
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -58,6 +74,11 @@ export interface Database {
         Row: UserFile;
         Insert: Omit<UserFile, "id" | "created_at">;
         Update: Partial<Omit<UserFile, "id" | "created_at">>;
+      };
+      subscriptions: {
+        Row: Subscription;
+        Insert: Omit<Subscription, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<Subscription, "id" | "created_at" | "updated_at">>;
       };
     };
     Views: {};
