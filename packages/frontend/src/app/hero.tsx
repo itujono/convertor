@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownIcon, HeartIcon, InfoIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Hero() {
@@ -37,18 +38,45 @@ export default function Hero() {
           {/* Customer Stats */}
           <div className="flex items-center gap-4 pt-10" role="region" aria-label="Customer testimonials">
             <div className="flex -space-x-2" role="img" aria-label="Customer avatars">
-              <div className="w-10 h-10 rounded-full bg-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
-                A
-              </div>
-              <div className="w-10 h-10 rounded-full bg-teal-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
-                B
-              </div>
-              <div className="w-10 h-10 rounded-full bg-red-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
-                C
-              </div>
-              <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-slate-600 font-bold text-sm">
-                +
-              </div>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Image
+                    priority
+                    src="/jackie.jpg"
+                    alt="Customer avatar"
+                    width={40}
+                    height={40}
+                    className="rounded-full w-10 h-10 object-cover"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Jackie C.</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Image
+                    priority
+                    src="/mariah-carey.webp"
+                    alt="Customer avatar"
+                    width={40}
+                    height={40}
+                    className="rounded-full w-10 h-10 object-cover"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Mariah C.</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Image
+                    priority
+                    src="/marshall.webp"
+                    alt="Customer avatar"
+                    width={40}
+                    height={40}
+                    className="rounded-full w-10 h-10 object-cover"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Marshall M.</TooltipContent>
+              </Tooltip>
             </div>
             <div>
               <div className="text-2xl font-bold text-slate-900 dark:text-white">500+</div>

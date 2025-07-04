@@ -18,7 +18,7 @@ interface PricingModalProps {
 export function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
-  const premiumPrice = AppSettings.plans.premium.price;
+  const premium = AppSettings.plans.premium;
 
   const handleCheckout = async (plan: "monthly" | "yearly") => {
     if (!user) {
@@ -59,36 +59,43 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
               <div>
                 <h3 className="font-semibold">Monthly</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-xl font-bold">${premiumPrice.monthly}</span>
+                  <span className="text-xl font-bold">${premium.price?.monthly ?? 0}</span>
                   <span className="text-gray-500 text-sm relative md:bottom-0.5">/month</span>
                 </div>
               </div>
             </div>
-            <Button onClick={() => handleCheckout("monthly")} disabled={!user || isProcessing} className="w-32">
+            <Button onClick={() => handleCheckout("monthly")} disabled={!user || isProcessing} className="w-36">
               {isProcessing ? "Processing..." : "Get Monthly"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
 
           {/* Yearly Plan */}
-          <div className="border-2 border-primary rounded-lg p-4 flex items-center justify-between relative">
-            <Badge className="absolute -top-3 left-4 bg-primary">
-              <Zap className="h-3 w-3 mr-1" />
-              Best Value
-            </Badge>
+          <div className="border border-primary rounded-lg p-4 flex items-center justify-between relative">
+            {premium.price?.yearly && (
+              <Badge className="absolute -top-3 left-4 bg-primary">
+                <Zap className="h-3 w-3 mr-1" />
+                Best Value
+              </Badge>
+            )}
             <div className="flex items-center gap-4">
               <div>
                 <h3 className="font-semibold">Yearly</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-xl font-bold">${premiumPrice.yearly}</span>
+                  <span className="text-xl font-bold">${premium.price?.yearly ?? 0}</span>
                   <span className="text-gray-500 text-sm relative md:bottom-0.5">/year</span>
+                  {/* <p className="text-sm text-green-600 ml-2 relative md:bottom-0.5">
+                    Save{" "}
+                    {Math.round(
+                      ((premium.price?.monthly ?? 0 * 12 - premium.price?.yearly ?? 0) /
+                        (premium.price?.monthly ?? 0 * 12)) *
+                        100,
+                    )}
+                    %
+                  </p> */}
                 </div>
-                <p className="text-sm text-green-600">
-                  Save{" "}
-                  {Math.round(((premiumPrice.monthly * 12 - premiumPrice.yearly) / (premiumPrice.monthly * 12)) * 100)}%
-                </p>
               </div>
             </div>
-            <Button onClick={() => handleCheckout("yearly")} disabled={!user || isProcessing} className="w-32">
+            <Button onClick={() => handleCheckout("yearly")} disabled={!user || isProcessing} className="w-36">
               {isProcessing ? "Processing..." : "Get Yearly"} <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
@@ -96,19 +103,19 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
 
         {/* Shared Benefits */}
         <div className="mt-4 space-y-2">
-          <h4 className="font-semibold text-gray-900">Premium includes:</h4>
-          <ul className="space-y-3">
+          <h4 className="font-semibold text-gray-900">What you get:</h4>
+          <ul className="space-y-3 text-gray-600">
             <li className="flex items-center">
               <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-              <span className="text-sm">More batch conversions (up to 10 files)</span>
+              <span className="text-sm">More batch conversions (up to {premium.maxFiles} files)</span>
             </li>
             <li className="flex items-center">
               <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-              <span className="text-sm">Converts 1000 files per month</span>
+              <span className="text-sm">Converts {premium.quotas.conversionsPerMonth} files per month</span>
             </li>
             <li className="flex items-center">
               <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-              <span className="text-sm">Supports larger file sizes (up to 2GB)</span>
+              <span className="text-sm">Supports larger file sizes (up to {premium.maxFileSizeMB / 1024}GB)</span>
             </li>
             <li className="flex items-center">
               <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
