@@ -28,7 +28,7 @@ export function useOnlineDetector() {
 
           clearTimeout(timeoutId);
           return true;
-        } catch (error) {
+        } catch {
           continue;
         }
       }

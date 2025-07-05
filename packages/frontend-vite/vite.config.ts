@@ -6,11 +6,22 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [tanstackRouter(), react(), tailwindcss()],
+  plugins: [
+    tanstackRouter({
+      routesDirectory: "./src/routes",
+      generatedRouteTree: "./src/routeTree.gen.ts",
+    }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
   // Using Vite's default port 5173
 });
