@@ -1,6 +1,36 @@
 import { useState, useCallback } from "react";
-import { apiClient } from "@/lib/api-client";
+import { useSaveClientConvertedFile } from "@/lib/api-hooks";
+import { supabase } from "@/lib/auth-client";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+// Helper function for batch limit check
+async function checkBatchLimit(fileCount: number) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (session?.access_token) {
+    headers["Authorization"] = `Bearer ${session.access_token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/check-batch-limit`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ fileCount }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ error: "Request failed" }));
+    throw new Error(errorData.error || "Request failed");
+  }
+
+  return response.json();
+}
 
 export interface ClientConversionOptions {
   targetFormat: "jpeg" | "png" | "webp";
@@ -219,6 +249,7 @@ export function useClientImageConverter() {
   const [conversions, setConversions] = useState<ClientConversionProgress[]>(
     []
   );
+  const saveClientConvertedFile = useSaveClientConvertedFile();
 
   const convertFiles = useCallback(
     async (
@@ -232,7 +263,7 @@ export function useClientImageConverter() {
 
       // Check batch limit before starting conversions
       try {
-        await apiClient.checkBatchLimit(imageFiles.length);
+        await checkBatchLimit(imageFiles.length);
       } catch (error) {
         console.error("Batch limit check failed:", error);
         // Show error for all files
@@ -358,13 +389,13 @@ export function useClientImageConverter() {
               const originalFormat =
                 originalFileName.split(".").pop()?.toLowerCase() || "";
 
-              await apiClient.saveClientConvertedFile(
-                result.blob,
+              await saveClientConvertedFile.mutateAsync({
+                blob: result.blob,
                 originalFileName,
                 originalFormat,
-                targetFormat,
-                quality
-              );
+                convertedFormat: targetFormat,
+                quality,
+              });
 
               setConversions((prev) =>
                 prev.map((c) =>

@@ -360,7 +360,6 @@ export default function UploadWithProgress() {
           <div className="flex items-center gap-3">
             <PlanBadge
               showUpgradeButton={shouldShowUpgrade}
-              onUpgradeClick={() => {}}
               UpgradeComponent={shouldShowUpgrade ? UpgradeButton : undefined}
             />
           </div>

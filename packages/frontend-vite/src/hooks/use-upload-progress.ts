@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
+// Auth context import removed as not needed
 import { abortClient } from "@/lib/abort-client";
 import { useOnlineDetector } from "@/hooks/use-online-detector";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
@@ -323,7 +323,7 @@ export function useUploadProgress() {
   const [abortControllers, setAbortControllers] = useState<
     Map<string, AbortController>
   >(new Map());
-  const { refreshUser, updateConversionCountOptimistic } = useAuth();
+  // Auth context available if needed
   const { isOnline } = useOnlineDetector();
   const hasRefreshedRef = useRef(false);
 
@@ -357,13 +357,13 @@ export function useUploadProgress() {
 
     if (allComplete && !hasRefreshedRef.current) {
       hasRefreshedRef.current = true;
-      refreshUser();
+      // User data will be refreshed by React Query automatically
     }
 
     if (uploadProgress.length === 0) {
       hasRefreshedRef.current = false;
     }
-  }, [uploadProgress, refreshUser]);
+  }, [uploadProgress]);
 
   const handleFilesAdded = (
     addedFiles: FileWithPreview[],
@@ -441,25 +441,7 @@ export function useUploadProgress() {
                     description: `${fileName || "Your file"} is ready for download`,
                   });
 
-                  // Immediately update conversion count in UI
-                  updateConversionCountOptimistic(1);
-
-                  console.log(
-                    "🔄 Refreshing user data after successful conversion..."
-                  );
-                  // Refresh immediately since DB should be committed by response time
-                  refreshUser()
-                    .then(() => {
-                      console.log(
-                        "✅ User data refreshed successfully after conversion"
-                      );
-                    })
-                    .catch((error) => {
-                      console.error(
-                        "❌ Failed to refresh user data after conversion:",
-                        error
-                      );
-                    });
+                  // User data will be refreshed automatically by React Query
                 },
                 (error) => {
                   setUploadProgress((prev) =>

@@ -13,11 +13,7 @@ import {
   type UserPlan,
   type PlanLimits,
 } from "@/lib/app-settings";
-import {
-  generateConversionLimitMessages,
-  calculateRemainingConversions,
-  checkDailyReset,
-} from "@/lib/conversion-messages";
+import { generateConversionLimitMessages } from "@/lib/conversion-messages";
 
 interface User {
   id: string;
@@ -71,7 +67,7 @@ export function useAppSettings(): AppSettingsContext {
 
   // Create a cache-busting key that changes when user data changes
   const userDataKey = authUser
-    ? `${authUser.id}-${authUser.conversionCount}-${authUser.lastReset}`
+    ? `${authUser.id}-${authUser.usage?.conversions_count || 0}`
     : "no-user";
 
   const user: User | null = useMemo(
@@ -83,11 +79,9 @@ export function useAppSettings(): AppSettingsContext {
             plan: authUser.plan as UserPlan,
             isAuthenticated: !!session,
             usage: {
-              // Calculate proper conversions today using daily reset logic
-              conversionsToday: checkDailyReset(authUser.lastReset)
-                ? 0
-                : authUser.conversionCount || 0,
-              storageUsedGB: 0, // TODO: Implement storage tracking
+              // Use the conversion count from the user's usage object
+              conversionsToday: authUser.usage?.conversions_count || 0,
+              storageUsedGB: authUser.usage?.storage_used || 0,
             },
           }
         : null,
@@ -162,9 +156,7 @@ export function useAppSettings(): AppSettingsContext {
     const canConvertMore = () => {
       if (!authUser) return true;
 
-      const conversionsToday = checkDailyReset(authUser.lastReset)
-        ? 0
-        : authUser.conversionCount || 0;
+      const conversionsToday = authUser.usage?.conversions_count || 0;
 
       return conversionsToday < planLimits.quotas.conversionsPerDay;
     };
@@ -176,11 +168,10 @@ export function useAppSettings(): AppSettingsContext {
         };
       }
 
-      // Use the centralized calculation that handles daily resets
-      const dailyRemaining = calculateRemainingConversions(
-        authUser.plan as "free" | "premium",
-        authUser.conversionCount,
-        authUser.lastReset
+      const conversionsToday = authUser.usage?.conversions_count || 0;
+      const dailyRemaining = Math.max(
+        0,
+        planLimits.quotas.conversionsPerDay - conversionsToday
       );
 
       return {
@@ -193,16 +184,14 @@ export function useAppSettings(): AppSettingsContext {
         return { daily: 0, storage: 0 };
       }
 
-      const conversionsToday = checkDailyReset(authUser.lastReset)
-        ? 0
-        : authUser.conversionCount || 0;
+      const conversionsToday = authUser.usage?.conversions_count || 0;
 
       return {
         daily: Math.min(
           100,
           (conversionsToday / planLimits.quotas.conversionsPerDay) * 100
         ),
-        storage: 0, // TODO: Implement storage tracking
+        storage: (authUser.usage?.storage_used || 0) / 1024, // Convert to GB
       };
     };
 

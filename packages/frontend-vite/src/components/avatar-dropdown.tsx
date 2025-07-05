@@ -21,7 +21,7 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 
 export default function AvatarDropdown() {
   const { user, signOut, googleUser } = useAuth();
-  const { userPlan, formatPlanName } = useAppSettings();
+  const { formatPlanName } = useAppSettings();
 
   const handleSignOut = async () => {
     await signOut();
@@ -38,7 +38,7 @@ export default function AvatarDropdown() {
 
   if (!user) return null;
 
-  const displayName = googleUser?.full_name || user.name || "User";
+  const displayName = googleUser?.name || user.name || "User";
 
   return (
     <DropdownMenu>

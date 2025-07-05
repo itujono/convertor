@@ -435,7 +435,7 @@ export function useMarkFileDownloaded() {
 
       return { previousFiles };
     },
-    onError: (error, fileId, context) => {
+    onError: (_error, _fileId, context) => {
       if (context?.previousFiles) {
         queryClient.setQueryData(queryKeys.userFiles, context.previousFiles);
       }
@@ -471,7 +471,7 @@ export function useDeleteUserFile() {
 
       return { previousFiles };
     },
-    onError: (error, fileId, context) => {
+    onError: (_error, _fileId, context) => {
       if (context?.previousFiles) {
         queryClient.setQueryData(queryKeys.userFiles, context.previousFiles);
       }

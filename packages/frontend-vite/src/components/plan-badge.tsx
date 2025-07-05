@@ -1,4 +1,10 @@
-import { Crown, Zap, ChevronDownIcon, LogOutIcon, HelpCircleIcon, BookOpenIcon } from "lucide-react";
+import {
+  Crown,
+  Zap,
+  ChevronDownIcon,
+  HelpCircleIcon,
+  BookOpenIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -18,12 +24,14 @@ import { cn } from "@/lib/utils";
 
 interface PlanBadgeProps {
   showUpgradeButton?: boolean;
-  onUpgradeClick?: () => void;
   UpgradeComponent?: React.ComponentType;
 }
 
-export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeComponent }: PlanBadgeProps) {
-  const { userPlan, formatPlanName, shouldShowUpgrade } = useAppSettings();
+export function PlanBadge({
+  showUpgradeButton = false,
+  UpgradeComponent,
+}: PlanBadgeProps) {
+  const { userPlan, formatPlanName } = useAppSettings();
   const { isLoading, user, signOut, googleUser } = useAuth();
 
   const isPremium = userPlan === "premium";
@@ -43,7 +51,7 @@ export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeCo
 
   if (!user) return null;
 
-  const displayName = googleUser?.full_name || user.name || "User";
+  const displayName = googleUser?.name || user.name || "User";
 
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
@@ -56,18 +64,33 @@ export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeCo
               className="h-auto p-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <Avatar className="size-6">
-                <AvatarImage src={googleUser?.avatar_url} alt={`${displayName}'s profile`} />
-                <AvatarFallback className="text-xs">{getInitials(displayName || user.email)}</AvatarFallback>
+                <AvatarImage
+                  src={googleUser?.avatar_url}
+                  alt={`${displayName}'s profile`}
+                />
+                <AvatarFallback className="text-xs">
+                  {getInitials(displayName || user.email)}
+                </AvatarFallback>
               </Avatar>
               <span className="text-sm font-bold">{displayName}</span>
-              <ChevronDownIcon size={12} className="opacity-60" aria-hidden="true" />
+              <ChevronDownIcon
+                size={12}
+                className="opacity-60"
+                aria-hidden="true"
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="max-w-[30rem] min-w-64">
             <DropdownMenuLabel className="flex min-w-0 flex-col">
-              <span className="text-foreground truncate text-sm font-medium">{displayName}</span>
-              <span className="text-muted-foreground truncate text-xs font-normal">{user.email}</span>
-              <span className="text-muted-foreground truncate text-xs font-normal mt-1">{formatPlanName()} Plan</span>
+              <span className="text-foreground truncate text-sm font-medium">
+                {displayName}
+              </span>
+              <span className="text-muted-foreground truncate text-xs font-normal">
+                {user.email}
+              </span>
+              <span className="text-muted-foreground truncate text-xs font-normal mt-1">
+                {formatPlanName()} Plan
+              </span>
             </DropdownMenuLabel>
 
             {/* Compact Usage Stats in Dropdown */}
@@ -78,11 +101,19 @@ export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeCo
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem disabled>
-                <HelpCircleIcon size={16} className="opacity-60" aria-hidden="true" />
+                <HelpCircleIcon
+                  size={16}
+                  className="opacity-60"
+                  aria-hidden="true"
+                />
                 <span>Help & Support</span>
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
-                <BookOpenIcon size={16} className="opacity-60" aria-hidden="true" />
+                <BookOpenIcon
+                  size={16}
+                  className="opacity-60"
+                  aria-hidden="true"
+                />
                 <span>Documentation</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -106,10 +137,14 @@ export function PlanBadge({ showUpgradeButton = false, onUpgradeClick, UpgradeCo
                 "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border",
                 isPremium
                   ? "bg-gradient-to-r from-yellow-50 to-orange-50 text-yellow-800 border-yellow-200 dark:from-yellow-900/20 dark:to-orange-900/20 dark:text-yellow-200 dark:border-yellow-700"
-                  : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+                  : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600"
               )}
             >
-              {isPremium ? <Crown className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+              {isPremium ? (
+                <Crown className="w-3 h-3" />
+              ) : (
+                <Zap className="w-3 h-3" />
+              )}
               <span>{formatPlanName()}</span>
             </div>
 
