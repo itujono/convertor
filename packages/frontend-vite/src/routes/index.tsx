@@ -10,6 +10,8 @@ import { PaymentSuccessHandler } from "@/components/payment-success-handler";
 import { useAuth } from "@/lib/auth-context";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useState, useEffect } from "react";
+import Navbar from "@/components/navbar";
+import Footer from "@/components/footer";
 import Hero from "@/hero";
 
 export const Route = createFileRoute("/")({
@@ -23,6 +25,8 @@ function HomePage() {
         <PaymentSuccessHandler />
       </Suspense>
 
+      <Navbar />
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:pb-20 space-y-20">
         <Hero />
 
@@ -32,23 +36,11 @@ function HomePage() {
           </Suspense>
         </section>
       </main>
+
+      <Footer />
     </div>
   );
 }
-
-// function HeroSection() {
-//   return (
-//     <div className="text-center space-y-8">
-//       <h1 className="text-4xl md:text-6xl font-bold text-center mb-8">
-//         File Converter
-//       </h1>
-//       <p className="text-xl text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
-//         Convert your files quickly and easily. Support for 50+ formats including
-//         images, videos, audio, and documents.
-//       </p>
-//     </div>
-//   );
-// }
 
 function UploadSection() {
   const { session, isLoading, signInWithGoogle, user } = useAuth();

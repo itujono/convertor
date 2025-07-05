@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import { apiClient } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 export interface ClientConversionOptions {
@@ -46,27 +45,31 @@ const SUPPORTED_INPUT_FORMATS = [
   "image/tiff",
 ];
 
-export function isImageFile(file: File | FileWithPreview | { type: string }): boolean {
+export function isImageFile(
+  file: File | FileWithPreview | { type: string }
+): boolean {
   const fileType =
     file instanceof File
       ? file.type
       : "file" in file
-      ? file.file instanceof File
-        ? file.file.type
-        : file.file.type
-      : file.type;
+        ? file.file instanceof File
+          ? file.file.type
+          : file.file.type
+        : file.type;
   return SUPPORTED_INPUT_FORMATS.includes(fileType.toLowerCase());
 }
 
 export function canConvertClientSide(
   file: File | FileWithPreview | { type: string; size: number },
-  targetFormat: string,
+  targetFormat: string
 ): boolean {
   if (!isImageFile(file)) return false;
 
   // Get the actual File object for size check
-  const actualFile = file instanceof File ? file : "file" in file ? file.file : file;
-  const fileSize = actualFile instanceof File ? actualFile.size : actualFile.size;
+  const actualFile =
+    file instanceof File ? file : "file" in file ? file.file : file;
+  const fileSize =
+    actualFile instanceof File ? actualFile.size : actualFile.size;
 
   // Skip client-side conversion for very large files (>50MB) to avoid browser crashes
   if (fileSize > 50 * 1024 * 1024) return false;
@@ -81,7 +84,7 @@ export function canConvertClientSide(
 async function convertImageClientSide(
   file: File,
   options: ClientConversionOptions,
-  onProgress?: (progress: number) => void,
+  onProgress?: (progress: number) => void
 ): Promise<ClientConversionResult> {
   if (!isImageFile(file)) {
     throw new Error("File is not a supported image format");
@@ -150,7 +153,7 @@ async function convertImageClientSide(
           }
         },
         mimeType,
-        qualitySettings.quality,
+        qualitySettings.quality
       );
     });
 
@@ -173,7 +176,7 @@ async function convertImageClientSide(
             }
           },
           mimeType,
-          lowerQuality,
+          lowerQuality
         );
       });
 
@@ -186,7 +189,8 @@ async function convertImageClientSide(
 
     // Generate new filename
     const originalName = file.name.split(".").slice(0, -1).join(".");
-    const extension = options.targetFormat === "jpeg" ? "jpg" : options.targetFormat;
+    const extension =
+      options.targetFormat === "jpeg" ? "jpg" : options.targetFormat;
     const newFileName = `${originalName}_converted.${extension}`;
 
     const downloadUrl = URL.createObjectURL(finalBlob);
@@ -205,19 +209,22 @@ async function convertImageClientSide(
       downloadUrl,
     };
   } catch (error) {
-    throw new Error(`Conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    throw new Error(
+      `Conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
 export function useClientImageConverter() {
-  const [conversions, setConversions] = useState<ClientConversionProgress[]>([]);
-  const { refreshUser, updateConversionCountOptimistic } = useAuth();
+  const [conversions, setConversions] = useState<ClientConversionProgress[]>(
+    []
+  );
 
   const convertFiles = useCallback(
     async (
       files: FileWithPreview[],
       selectedFormats: Record<string, string>,
-      selectedQualities: Record<string, string>,
+      selectedQualities: Record<string, string>
     ) => {
       const imageFiles = files.filter((file) => isImageFile(file));
 
@@ -229,26 +236,36 @@ export function useClientImageConverter() {
       } catch (error) {
         console.error("Batch limit check failed:", error);
         // Show error for all files
-        const initialProgress: ClientConversionProgress[] = imageFiles.map((file) => ({
-          fileId: file.id,
-          progress: 0,
-          completed: false,
-          converting: false,
-          error: error instanceof Error ? error.message : "Conversion limit exceeded",
-        }));
+        const initialProgress: ClientConversionProgress[] = imageFiles.map(
+          (file) => ({
+            fileId: file.id,
+            progress: 0,
+            completed: false,
+            converting: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Conversion limit exceeded",
+          })
+        );
         setConversions(initialProgress);
         return;
       }
 
       // Initialize conversion progress for each file
-      const initialProgress: ClientConversionProgress[] = imageFiles.map((file) => ({
-        fileId: file.id,
-        progress: 0,
-        completed: false,
-        converting: true,
-      }));
+      const initialProgress: ClientConversionProgress[] = imageFiles.map(
+        (file) => ({
+          fileId: file.id,
+          progress: 0,
+          completed: false,
+          converting: true,
+        })
+      );
 
-      setConversions((prev) => [...prev.filter((c) => !imageFiles.some((f) => f.id === c.fileId)), ...initialProgress]);
+      setConversions((prev) => [
+        ...prev.filter((c) => !imageFiles.some((f) => f.id === c.fileId)),
+        ...initialProgress,
+      ]);
 
       // Process files sequentially to avoid overwhelming the browser
       for (const file of imageFiles) {
@@ -258,7 +275,11 @@ export function useClientImageConverter() {
 
           // Update progress to show conversion starting
           setConversions((prev) =>
-            prev.map((c) => (c.fileId === file.id ? { ...c, progress: 10, converting: true } : c)),
+            prev.map((c) =>
+              c.fileId === file.id
+                ? { ...c, progress: 10, converting: true }
+                : c
+            )
           );
 
           if (!canConvertClientSide(file, targetFormat)) {
@@ -266,9 +287,13 @@ export function useClientImageConverter() {
             setConversions((prev) =>
               prev.map((c) =>
                 c.fileId === file.id
-                  ? { ...c, converting: false, error: "File not suitable for client-side conversion" }
-                  : c,
-              ),
+                  ? {
+                      ...c,
+                      converting: false,
+                      error: "File not suitable for client-side conversion",
+                    }
+                  : c
+              )
             );
             continue;
           }
@@ -278,9 +303,13 @@ export function useClientImageConverter() {
             setConversions((prev) =>
               prev.map((c) =>
                 c.fileId === file.id
-                  ? { ...c, converting: false, error: "File metadata cannot be converted client-side" }
-                  : c,
-              ),
+                  ? {
+                      ...c,
+                      converting: false,
+                      error: "File metadata cannot be converted client-side",
+                    }
+                  : c
+              )
             );
             continue;
           }
@@ -292,8 +321,10 @@ export function useClientImageConverter() {
               quality: quality as "low" | "medium" | "high",
             },
             (progress) => {
-              setConversions((prev) => prev.map((c) => (c.fileId === file.id ? { ...c, progress } : c)));
-            },
+              setConversions((prev) =>
+                prev.map((c) => (c.fileId === file.id ? { ...c, progress } : c))
+              );
+            }
           );
 
           // Update with completed result - IMMEDIATELY show download button
@@ -308,34 +339,40 @@ export function useClientImageConverter() {
                     saving: false, // Don't show saving state initially
                     result,
                   }
-                : c,
-            ),
+                : c
+            )
           );
 
           // Save to server for persistence in the background (no await = async)
           const saveToServer = async () => {
             try {
               // Show saving indicator in the background
-              setConversions((prev) => prev.map((c) => (c.fileId === file.id ? { ...c, saving: true } : c)));
+              setConversions((prev) =>
+                prev.map((c) =>
+                  c.fileId === file.id ? { ...c, saving: true } : c
+                )
+              );
 
               // We already verified file.file is a File instance above
               const originalFileName = file.file.name;
-              const originalFormat = originalFileName.split(".").pop()?.toLowerCase() || "";
+              const originalFormat =
+                originalFileName.split(".").pop()?.toLowerCase() || "";
 
               await apiClient.saveClientConvertedFile(
                 result.blob,
                 originalFileName,
                 originalFormat,
                 targetFormat,
-                quality,
+                quality
               );
 
               setConversions((prev) =>
-                prev.map((c) => (c.fileId === file.id ? { ...c, saving: false, savedToServer: true } : c)),
+                prev.map((c) =>
+                  c.fileId === file.id
+                    ? { ...c, saving: false, savedToServer: true }
+                    : c
+                )
               );
-
-              // Immediately update conversion count in UI
-              updateConversionCountOptimistic(1);
             } catch (saveError) {
               console.error("Background save to server failed:", saveError);
               setConversions((prev) =>
@@ -347,8 +384,8 @@ export function useClientImageConverter() {
                         savedToServer: false,
                         // Don't show error in main UI since download still works
                       }
-                    : c,
-                ),
+                    : c
+                )
               );
             }
           };
@@ -364,28 +401,18 @@ export function useClientImageConverter() {
                     progress: 0,
                     completed: false,
                     converting: false,
-                    error: error instanceof Error ? error.message : "Conversion failed",
+                    error:
+                      error instanceof Error
+                        ? error.message
+                        : "Conversion failed",
                   }
-                : c,
-            ),
+                : c
+            )
           );
         }
       }
-
-      try {
-        console.log("🔄 Refreshing user data after client-side conversions...");
-        // Refresh immediately since DB should be committed by response time
-        try {
-          await refreshUser();
-          console.log("✅ User data refreshed successfully after client-side conversions");
-        } catch (error) {
-          console.error("❌ Failed to refresh user data after client-side conversions:", error);
-        }
-      } catch (error) {
-        console.warn("Failed to refresh user data after conversions:", error);
-      }
     },
-    [refreshUser, updateConversionCountOptimistic],
+    []
   );
 
   const downloadFile = useCallback(
@@ -401,11 +428,13 @@ export function useClientImageConverter() {
         document.body.removeChild(a);
       }
     },
-    [conversions],
+    [conversions]
   );
 
   const downloadAllAsZip = useCallback(async () => {
-    const completedConversions = conversions.filter((c) => c.completed && c.result);
+    const completedConversions = conversions.filter(
+      (c) => c.completed && c.result
+    );
 
     if (completedConversions.length === 0) return;
 
@@ -438,12 +467,15 @@ export function useClientImageConverter() {
       }
       setConversions((prev) => prev.filter((c) => c.fileId !== fileId));
     },
-    [conversions],
+    [conversions]
   );
 
   const hasActiveConversions = conversions.some((c) => c.converting);
-  const hasCompletedConversions = conversions.some((c) => c.completed && !c.error);
-  const areAllConversionsComplete = conversions.length > 0 && conversions.every((c) => c.completed && !c.error);
+  const hasCompletedConversions = conversions.some(
+    (c) => c.completed && !c.error
+  );
+  const areAllConversionsComplete =
+    conversions.length > 0 && conversions.every((c) => c.completed && !c.error);
 
   return {
     conversions,

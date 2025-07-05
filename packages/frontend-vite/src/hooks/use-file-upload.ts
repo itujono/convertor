@@ -1,7 +1,12 @@
-"use client";
-
 import type React from "react";
-import { useCallback, useRef, useState, type ChangeEvent, type DragEvent, type InputHTMLAttributes } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type InputHTMLAttributes,
+} from "react";
 import { useAppSettings } from "./use-app-settings";
 
 export type FileMetadata = {
@@ -45,12 +50,16 @@ export type FileUploadActions = {
   handleDrop: (e: DragEvent<HTMLElement>) => void;
   handleFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
   openFileDialog: () => void;
-  getInputProps: (props?: InputHTMLAttributes<HTMLInputElement>) => InputHTMLAttributes<HTMLInputElement> & {
+  getInputProps: (
+    props?: InputHTMLAttributes<HTMLInputElement>
+  ) => InputHTMLAttributes<HTMLInputElement> & {
     ref: React.Ref<HTMLInputElement>;
   };
 };
 
-export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState, FileUploadActions] => {
+export const useFileUpload = (
+  options: FileUploadOptions = {}
+): [FileUploadState, FileUploadActions] => {
   const { planLimits, validateConversionCount } = useAppSettings();
 
   const {
@@ -110,15 +119,18 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
 
       return null;
     },
-    [accept, maxSize],
+    [accept, maxSize]
   );
 
-  const createPreview = useCallback((file: File | FileMetadata): string | undefined => {
-    if (file instanceof File) {
-      return URL.createObjectURL(file);
-    }
-    return file.url;
-  }, []);
+  const createPreview = useCallback(
+    (file: File | FileMetadata): string | undefined => {
+      if (file instanceof File) {
+        return URL.createObjectURL(file);
+      }
+      return file.url;
+    },
+    []
+  );
 
   const generateUniqueId = useCallback((file: File | FileMetadata): string => {
     if (file instanceof File) {
@@ -131,7 +143,11 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
     setState((prev) => {
       // Clean up object URLs
       prev.files.forEach((file) => {
-        if (file.preview && file.file instanceof File && file.file.type.startsWith("image/")) {
+        if (
+          file.preview &&
+          file.file instanceof File &&
+          file.file.type.startsWith("image/")
+        ) {
           URL.revokeObjectURL(file.preview);
         }
       });
@@ -167,7 +183,11 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
       }
 
       // Check if adding these files would exceed maxFiles (only in multiple mode)
-      if (multiple && maxFiles !== Infinity && state.files.length + newFilesArray.length > maxFiles) {
+      if (
+        multiple &&
+        maxFiles !== Infinity &&
+        state.files.length + newFilesArray.length > maxFiles
+      ) {
         errors.push(`You can only upload a maximum of ${maxFiles} files.`);
         setState((prev) => ({ ...prev, errors }));
         return;
@@ -179,7 +199,9 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         // Only check for duplicates if multiple files are allowed
         if (multiple) {
           const isDuplicate = state.files.some(
-            (existingFile) => existingFile.file.name === file.name && existingFile.file.size === file.size,
+            (existingFile) =>
+              existingFile.file.name === file.name &&
+              existingFile.file.size === file.size
           );
 
           // Skip duplicate files silently
@@ -193,7 +215,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
           errors.push(
             multiple
               ? `Some files exceed the maximum size of ${formatBytes(maxSize)}.`
-              : `File exceeds the maximum size of ${formatBytes(maxSize)}.`,
+              : `File exceeds the maximum size of ${formatBytes(maxSize)}.`
           );
           return;
         }
@@ -212,11 +234,15 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
 
       // Check conversion limits for all valid files
       if (validFiles.length > 0) {
-        const totalFilesToConvert = (multiple ? state.files.length : 0) + validFiles.length;
-        const conversionValidation = validateConversionCount(totalFilesToConvert);
+        const totalFilesToConvert =
+          (multiple ? state.files.length : 0) + validFiles.length;
+        const conversionValidation =
+          validateConversionCount(totalFilesToConvert);
 
         if (!conversionValidation.isValid) {
-          errors.push(conversionValidation.error || "Conversion limit exceeded");
+          errors.push(
+            conversionValidation.error || "Conversion limit exceeded"
+          );
           // Don't add files if conversion limit would be exceeded
           setState((prev) => ({
             ...prev,
@@ -237,7 +263,9 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         onFilesAdded?.(validFiles);
 
         setState((prev) => {
-          const newFiles = !multiple ? validFiles : [...prev.files, ...validFiles];
+          const newFiles = !multiple
+            ? validFiles
+            : [...prev.files, ...validFiles];
           onFilesChange?.(newFiles);
           return {
             ...prev,
@@ -269,7 +297,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
       clearFiles,
       onFilesChange,
       onFilesAdded,
-    ],
+    ]
   );
 
   const removeFile = useCallback(
@@ -295,7 +323,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         };
       });
     },
-    [onFilesChange],
+    [onFilesChange]
   );
 
   const clearErrors = useCallback(() => {
@@ -348,7 +376,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         }
       }
     },
-    [addFiles, multiple],
+    [addFiles, multiple]
   );
 
   const handleFileChange = useCallback(
@@ -357,7 +385,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         addFiles(e.target.files);
       }
     },
-    [addFiles],
+    [addFiles]
   );
 
   const openFileDialog = useCallback(() => {
@@ -377,7 +405,7 @@ export const useFileUpload = (options: FileUploadOptions = {}): [FileUploadState
         ref: inputRef,
       };
     },
-    [accept, multiple, handleFileChange],
+    [accept, multiple, handleFileChange]
   );
 
   return [

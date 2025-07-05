@@ -1,6 +1,9 @@
-"use client";
-
-import { BookOpenIcon, ChevronDownIcon, LogOutIcon, HelpCircleIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  ChevronDownIcon,
+  LogOutIcon,
+  HelpCircleIcon,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -40,19 +43,37 @@ export default function AvatarDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-auto rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+        <Button
+          variant="ghost"
+          className="h-auto rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
           <Avatar>
-            <AvatarImage src={googleUser?.avatar_url} alt={`${displayName}'s profile`} />
-            <AvatarFallback>{getInitials(displayName || user.email)}</AvatarFallback>
+            <AvatarImage
+              src={googleUser?.avatar_url}
+              alt={`${displayName}'s profile`}
+            />
+            <AvatarFallback>
+              {getInitials(displayName || user.email)}
+            </AvatarFallback>
           </Avatar>
-          <ChevronDownIcon size={16} className="opacity-60" aria-hidden="true" />
+          <ChevronDownIcon
+            size={16}
+            className="opacity-60"
+            aria-hidden="true"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="max-w-[30rem] min-w-64">
         <DropdownMenuLabel className="flex min-w-0 flex-col">
-          <span className="text-foreground truncate text-sm font-medium">{displayName}</span>
-          <span className="text-muted-foreground truncate text-xs font-normal">{user.email}</span>
-          <span className="text-muted-foreground truncate text-xs font-normal mt-1">{formatPlanName()} Plan</span>
+          <span className="text-foreground truncate text-sm font-medium">
+            {displayName}
+          </span>
+          <span className="text-muted-foreground truncate text-xs font-normal">
+            {user.email}
+          </span>
+          <span className="text-muted-foreground truncate text-xs font-normal mt-1">
+            {formatPlanName()} Plan
+          </span>
         </DropdownMenuLabel>
         {/* <DropdownMenuSeparator /> */}
         {/* <DropdownMenuGroup>
@@ -76,7 +97,11 @@ export default function AvatarDropdown() {
             <span>Preferences</span>
           </DropdownMenuItem> */}
           <DropdownMenuItem disabled>
-            <HelpCircleIcon size={16} className="opacity-60" aria-hidden="true" />
+            <HelpCircleIcon
+              size={16}
+              className="opacity-60"
+              aria-hidden="true"
+            />
             <span>Help & Support</span>
           </DropdownMenuItem>
           <DropdownMenuItem disabled>

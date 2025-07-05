@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -45,8 +43,14 @@ export interface AppSettingsContext {
   canUseAdvancedSettings: boolean;
 
   validateFile: (file: File) => { isValid: boolean; error?: string };
-  validateFileCount: (currentCount: number) => { isValid: boolean; error?: string };
-  validateConversionCount: (conversionCount: number) => { isValid: boolean; error?: string };
+  validateFileCount: (currentCount: number) => {
+    isValid: boolean;
+    error?: string;
+  };
+  validateConversionCount: (conversionCount: number) => {
+    isValid: boolean;
+    error?: string;
+  };
   getMaxFileSize: () => number;
   getMaxFiles: () => number;
 
@@ -66,7 +70,9 @@ export function useAppSettings(): AppSettingsContext {
   const { user: authUser, session } = useAuth();
 
   // Create a cache-busting key that changes when user data changes
-  const userDataKey = authUser ? `${authUser.id}-${authUser.conversionCount}-${authUser.lastReset}` : "no-user";
+  const userDataKey = authUser
+    ? `${authUser.id}-${authUser.conversionCount}-${authUser.lastReset}`
+    : "no-user";
 
   const user: User | null = useMemo(
     () =>
@@ -78,12 +84,14 @@ export function useAppSettings(): AppSettingsContext {
             isAuthenticated: !!session,
             usage: {
               // Calculate proper conversions today using daily reset logic
-              conversionsToday: checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0,
+              conversionsToday: checkDailyReset(authUser.lastReset)
+                ? 0
+                : authUser.conversionCount || 0,
               storageUsedGB: 0, // TODO: Implement storage tracking
             },
           }
         : null,
-    [authUser, session],
+    [authUser, session]
   );
 
   const userPlan: UserPlan = user?.plan || AppSettings.auth.defaultPlan;
@@ -101,7 +109,7 @@ export function useAppSettings(): AppSettingsContext {
         return {
           isValid: false,
           error: `${category ? category.slice(0, -1) : "File type"} not supported for ${getPlanDisplayName(
-            userPlan,
+            userPlan
           )} plan`,
         };
       }
@@ -141,7 +149,10 @@ export function useAppSettings(): AppSettingsContext {
       if (conversionCount > remaining.daily) {
         return {
           isValid: false,
-          error: generateConversionLimitMessages.insufficientConversions(remaining.daily, conversionCount),
+          error: generateConversionLimitMessages.insufficientConversions(
+            remaining.daily,
+            conversionCount
+          ),
         };
       }
 
@@ -151,7 +162,9 @@ export function useAppSettings(): AppSettingsContext {
     const canConvertMore = () => {
       if (!authUser) return true;
 
-      const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
+      const conversionsToday = checkDailyReset(authUser.lastReset)
+        ? 0
+        : authUser.conversionCount || 0;
 
       return conversionsToday < planLimits.quotas.conversionsPerDay;
     };
@@ -167,7 +180,7 @@ export function useAppSettings(): AppSettingsContext {
       const dailyRemaining = calculateRemainingConversions(
         authUser.plan as "free" | "premium",
         authUser.conversionCount,
-        authUser.lastReset,
+        authUser.lastReset
       );
 
       return {
@@ -180,10 +193,15 @@ export function useAppSettings(): AppSettingsContext {
         return { daily: 0, storage: 0 };
       }
 
-      const conversionsToday = checkDailyReset(authUser.lastReset) ? 0 : authUser.conversionCount || 0;
+      const conversionsToday = checkDailyReset(authUser.lastReset)
+        ? 0
+        : authUser.conversionCount || 0;
 
       return {
-        daily: Math.min(100, (conversionsToday / planLimits.quotas.conversionsPerDay) * 100),
+        daily: Math.min(
+          100,
+          (conversionsToday / planLimits.quotas.conversionsPerDay) * 100
+        ),
         storage: 0, // TODO: Implement storage tracking
       };
     };
@@ -223,17 +241,25 @@ export function useAppSettings(): AppSettingsContext {
 }
 
 export function useFileValidation() {
-  const { validateFile, validateFileCount, validateConversionCount } = useAppSettings();
+  const { validateFile, validateFileCount, validateConversionCount } =
+    useAppSettings();
   return { validateFile, validateFileCount, validateConversionCount };
 }
 
 export function usePlanLimits() {
-  const { planLimits, userPlan, getMaxFileSize, getMaxFiles } = useAppSettings();
+  const { planLimits, userPlan, getMaxFileSize, getMaxFiles } =
+    useAppSettings();
   return { planLimits, userPlan, getMaxFileSize, getMaxFiles };
 }
 
 export function useUsageStats() {
-  const { user, getRemainingConversions, getUsagePercentage, canConvertMore, shouldShowUsageStats } = useAppSettings();
+  const {
+    user,
+    getRemainingConversions,
+    getUsagePercentage,
+    canConvertMore,
+    shouldShowUsageStats,
+  } = useAppSettings();
 
   return {
     user,

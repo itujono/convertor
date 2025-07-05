@@ -5,7 +5,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ArrowDownIcon, HeartIcon, InfoIcon } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 
 export default function Hero() {
   return (
@@ -34,12 +33,12 @@ export default function Hero() {
             </p>
           </header>
 
-          <Link to="/" aria-label="Start converting files">
+          <a href="#upload" aria-label="Start converting files">
             <Button size="lg" className="px-8 py-3 rounded-full">
               Start Converting{" "}
               <ArrowDownIcon className="w-4 h-4" aria-hidden="true" />
             </Button>
-          </Link>
+          </a>
 
           {/* Customer Stats */}
           <div

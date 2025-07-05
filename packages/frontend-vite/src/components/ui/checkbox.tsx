@@ -1,9 +1,7 @@
-"use client"
+import * as React from "react";
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 
-import * as React from "react"
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
-
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Checkbox({
   className,
@@ -53,7 +51,7 @@ function Checkbox({
         )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
-  )
+  );
 }
 
-export { Checkbox }
+export { Checkbox };

@@ -1,5 +1,3 @@
-"use client";
-
 import {
   Trash2Icon,
   UploadIcon,

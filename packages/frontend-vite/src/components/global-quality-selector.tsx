@@ -1,7 +1,9 @@
-"use client";
-
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useId } from "react";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
@@ -10,7 +12,10 @@ interface GlobalQualitySelectorProps {
   onGlobalQualityChange: (quality: string) => void;
 }
 
-export function GlobalQualitySelector({ globalQuality, onGlobalQualityChange }: GlobalQualitySelectorProps) {
+export function GlobalQualitySelector({
+  globalQuality,
+  onGlobalQualityChange,
+}: GlobalQualitySelectorProps) {
   const id = useId();
   const { planLimits, settings } = useAppSettings();
 
@@ -58,7 +63,10 @@ export function GlobalQualitySelector({ globalQuality, onGlobalQualityChange }: 
             return (
               <Tooltip key={quality.value}>
                 <TooltipTrigger asChild>{radioButton}</TooltipTrigger>
-                <TooltipContent className="bg-black text-white" arrowClassName="fill-black">
+                <TooltipContent
+                  className="bg-black text-white"
+                  arrowClassName="fill-black"
+                >
                   <p>Only available in premium</p>
                 </TooltipContent>
               </Tooltip>
