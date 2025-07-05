@@ -3,8 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownIcon, HeartIcon, InfoIcon } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 
 export default function Hero() {
   return (
@@ -40,8 +39,7 @@ export default function Hero() {
             <div className="flex -space-x-2" role="img" aria-label="Customer avatars">
               <Tooltip>
                 <TooltipTrigger>
-                  <Image
-                    priority
+                  <img
                     src="/jackie.jpg"
                     alt="Customer avatar"
                     width={40}
@@ -53,8 +51,7 @@ export default function Hero() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Image
-                    priority
+                  <img
                     src="/mariah-carey.webp"
                     alt="Customer avatar"
                     width={40}
@@ -66,8 +63,7 @@ export default function Hero() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger>
-                  <Image
-                    priority
+                  <img
                     src="/marshall.webp"
                     alt="Customer avatar"
                     width={40}

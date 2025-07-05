@@ -14,10 +14,12 @@
   "scripts": {
     "dev": "concurrently \"bun run dev:frontend\" \"bun run dev:backend\"",
     "dev:frontend": "cd packages/frontend && bun run dev",
+    "dev:vite": "cd packages/frontend-vite && bun run dev",
     "dev:backend": "cd packages/backend && bun run dev",
     "build:frontend": "cd packages/frontend && bun run build",
+    "build:vite": "cd packages/frontend-vite && bun run build",
     "build:backend": "cd packages/backend && bun run build",
-    "build": "bun run build:frontend && bun run build:backend",
+    "build": "bun run build:vite && bun run build:backend",
     "db:generate": "cd packages/db && bun run generate",
     "db:migrate": "cd packages/db && bun run migrate"
   },
@@ -26,6 +28,8 @@
     "packages/*"
   ],
   "dependencies": {
+    "@tanstack/react-router": "^1.124.0",
+    "@tanstack/react-router-devtools": "^1.124.0",
     "pg": "^8.16.0"
   }
 }
