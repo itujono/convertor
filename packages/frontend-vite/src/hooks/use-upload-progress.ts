@@ -4,6 +4,8 @@ import { apiClient } from "@/lib/api-client";
 // Auth context import removed as not needed
 import { abortClient } from "@/lib/abort-client";
 import { useOnlineDetector } from "@/hooks/use-online-detector";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/api-hooks";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -326,6 +328,7 @@ export function useUploadProgress() {
   // Auth context available if needed
   const { isOnline } = useOnlineDetector();
   const hasRefreshedRef = useRef(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const hasActiveUploads = uploadProgress.some(
@@ -441,7 +444,11 @@ export function useUploadProgress() {
                     description: `${fileName || "Your file"} is ready for download`,
                   });
 
-                  // User data will be refreshed automatically by React Query
+                  // Immediately invalidate and refetch user files to show in ReadyDownloads
+                  queryClient.invalidateQueries({
+                    queryKey: queryKeys.userFiles,
+                  });
+                  queryClient.refetchQueries({ queryKey: queryKeys.userFiles });
                 },
                 (error) => {
                   setUploadProgress((prev) =>

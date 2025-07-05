@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { useSaveClientConvertedFile } from "@/lib/api-hooks";
+import { useSaveClientConvertedFile, queryKeys } from "@/lib/api-hooks";
 import { supabase } from "@/lib/auth-client";
+import { useQueryClient } from "@tanstack/react-query";
 import type { FileWithPreview } from "@/hooks/use-file-upload";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -250,6 +251,7 @@ export function useClientImageConverter() {
     []
   );
   const saveClientConvertedFile = useSaveClientConvertedFile();
+  const queryClient = useQueryClient();
 
   const convertFiles = useCallback(
     async (
@@ -404,6 +406,10 @@ export function useClientImageConverter() {
                     : c
                 )
               );
+
+              // Immediately invalidate and refetch user files to show in ReadyDownloads
+              queryClient.invalidateQueries({ queryKey: queryKeys.userFiles });
+              queryClient.refetchQueries({ queryKey: queryKeys.userFiles });
             } catch (saveError) {
               console.error("Background save to server failed:", saveError);
               setConversions((prev) =>

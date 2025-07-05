@@ -221,7 +221,7 @@ export function useUserFiles() {
   return useQuery({
     queryKey: queryKeys.userFiles,
     queryFn: (): Promise<UserFilesResponse> => apiRequest("/api/user-files"),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 30 * 1000, // Reduced from 2 minutes to 30 seconds for faster updates
     gcTime: 5 * 60 * 1000,
     retry: 2,
     refetchOnWindowFocus: true,
