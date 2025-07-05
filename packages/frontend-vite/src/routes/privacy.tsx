@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { SEOHead } from "@/components/seo-head";
 import { AppSettings } from "@/lib/app-settings";
 
 export const Route = createFileRoute("/privacy")({
@@ -10,6 +11,13 @@ export const Route = createFileRoute("/privacy")({
 function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="Privacy Policy"
+        description={`${AppSettings.name} Privacy Policy. Learn how we protect your privacy with client-side processing and automatic file deletion. Your data stays private.`}
+        keywords={["privacy policy", "data protection", "file privacy", "GDPR"]}
+        url="/privacy"
+      />
+
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <article className="prose prose-slate dark:prose-invert max-w-none">

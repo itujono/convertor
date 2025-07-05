@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { SEOHead } from "@/components/seo-head";
 import { AppSettings } from "@/lib/app-settings";
 
 export const Route = createFileRoute("/terms")({
@@ -10,6 +11,18 @@ export const Route = createFileRoute("/terms")({
 function TermsPage() {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="Terms of Service"
+        description={`${AppSettings.name} Terms of Service. Read our terms and conditions for using our free online file conversion service.`}
+        keywords={[
+          "terms of service",
+          "legal",
+          "terms and conditions",
+          "usage policy",
+        ]}
+        url="/terms"
+      />
+
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <article className="prose prose-slate dark:prose-invert max-w-none">

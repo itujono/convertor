@@ -7,6 +7,7 @@ import { ReadyDownloads } from "@/components/ready-downloads";
 import { UsageStats } from "@/components/usage-stats";
 import { PricingModal } from "@/components/pricing-modal";
 import { PaymentSuccessHandler } from "@/components/payment-success-handler";
+import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/lib/auth-context";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useState, useEffect } from "react";
@@ -21,6 +22,8 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead />
+
       <Suspense fallback={null}>
         <PaymentSuccessHandler />
       </Suspense>

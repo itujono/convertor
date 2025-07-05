@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { SEOHead } from "@/components/seo-head";
 import { AppSettings } from "@/lib/app-settings";
 
 export const Route = createFileRoute("/about")({
@@ -10,6 +11,13 @@ export const Route = createFileRoute("/about")({
 function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="About"
+        description={`Learn about ${AppSettings.name}, your privacy-first solution for file format conversion. Convert images, videos, audio files, and documents with 50+ supported formats.`}
+        keywords={["about", "file converter", "privacy-first", "company info"]}
+        url="/about"
+      />
+
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <article className="prose prose-slate dark:prose-invert max-w-none">

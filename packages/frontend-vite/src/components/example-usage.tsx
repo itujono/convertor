@@ -4,7 +4,8 @@ import {
   useUserFiles,
   useDeleteUserFile,
   useMarkFileDownloaded,
-} from "@/hooks/use-api-queries";
+  type UserFile,
+} from "@/lib/api-hooks";
 import { Button } from "@/components/ui/button";
 
 export function ExampleUsage() {
@@ -35,11 +36,11 @@ export function ExampleUsage() {
   return (
     <div>
       <h2>Welcome, {user?.name}!</h2>
-      <p>Conversions used: {user?.conversionCount}</p>
+      <p>Conversions used: {user?.usage?.conversions_count}</p>
 
       <div>
         <h3>Your Files ({userFiles?.count || 0})</h3>
-        {userFiles?.files.map((file) => (
+        {userFiles?.files.map((file: UserFile) => (
           <div key={file.id} className="border p-4 rounded">
             <p>{file.original_file_name}</p>
             <p>Status: {file.status}</p>
