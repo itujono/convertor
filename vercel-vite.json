@@ -1,6 +1,6 @@
 {
-  "buildCommand": "bun run build",
-  "outputDirectory": "dist",
+  "buildCommand": "cd packages/frontend-vite && bun run build",
+  "outputDirectory": "packages/frontend-vite/dist",
   "installCommand": "bun install",
   "framework": null,
   "rewrites": [
