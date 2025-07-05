@@ -26,7 +26,13 @@ export async function getUserHandler(c: Context<{ Variables: Variables }>) {
       id: user.id,
       email: user.email!,
       name: user.user_metadata?.full_name || user.email!,
+      avatar_url: user.user_metadata?.avatar_url || "",
       plan: userData.plan,
+      usage: {
+        conversions_count: userData.conversionCount,
+        storage_used: 0, // TODO: Implement storage tracking if needed
+      },
+      // Keep backward compatibility
       conversionCount: userData.conversionCount,
       lastReset: userData.lastReset.toISOString(),
     });

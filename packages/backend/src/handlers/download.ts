@@ -48,10 +48,25 @@ function generateCacheKey(filePaths: string[]): string {
 export async function downloadHandler(c: Context<{ Variables: Variables }>) {
   try {
     const filename = c.req.param("filename");
+    console.log(`📥 Individual download request for: ${filename}`);
 
-    const { signedUrl } = await createSignedDownloadUrl(filename, 300); // 5 minutes
+    // Download the file from S3 and stream it with proper headers
+    const fileBuffer = await downloadFile(filename);
+    console.log(
+      `✅ Downloaded file from S3: ${filename} (${fileBuffer.length} bytes)`
+    );
 
-    return c.redirect(signedUrl);
+    // Extract clean filename for download
+    const cleanFilename = filename.split("/").pop() || "file";
+    console.log(`📄 Serving file as: ${cleanFilename}`);
+
+    // Set proper headers for download
+    c.header("Content-Type", "application/octet-stream");
+    c.header("Content-Disposition", `attachment; filename="${cleanFilename}"`);
+    c.header("Content-Length", fileBuffer.length.toString());
+    c.header("Cache-Control", "no-cache");
+
+    return c.body(fileBuffer);
   } catch (error) {
     console.error("Download error:", error);
     return c.json({ error: "Download failed" }, 500);

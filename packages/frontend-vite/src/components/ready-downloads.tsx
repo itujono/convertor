@@ -39,6 +39,7 @@ import {
   useUserFiles,
   useDeleteUserFile,
   useDownloadZip,
+  useDownloadFile,
   type UserFile,
 } from "@/lib/api-hooks";
 import { formatBytes } from "@/hooks/use-file-upload";
@@ -213,6 +214,7 @@ export function ReadyDownloads() {
 
   const deleteFile = useDeleteUserFile();
   const downloadZip = useDownloadZip();
+  const downloadFile = useDownloadFile();
 
   const userFiles = userFilesData?.files || [];
 
@@ -229,12 +231,55 @@ export function ReadyDownloads() {
   }, []);
 
   const handleDownload = async (file: UserFile) => {
-    if (!file.download_url) return;
+    if (!file.file_path) return;
 
     try {
-      window.open(file.download_url, "_blank");
+      // Use the full file path as the S3 key (not just the filename)
+      const filePath = file.file_path;
+
+      console.log(
+        `📥 Downloading file: ${filePath} (${file.converted_file_name || file.original_file_name})`
+      );
+
+      // Use the proper download hook that handles authentication and blob download
+      await downloadFile.mutateAsync(filePath);
+
+      console.log(
+        `✅ Downloaded: ${file.converted_file_name || file.original_file_name}`
+      );
     } catch (err) {
-      console.error("Failed to download file:", err);
+      console.error("Download failed:", err);
+
+      // Fallback: Try the direct S3 URL
+      if (file.download_url) {
+        console.log("Attempting fallback download via direct URL...");
+        try {
+          const response = await fetch(file.download_url);
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = file.converted_file_name || file.original_file_name;
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            console.log(
+              `✅ Downloaded via fallback: ${file.converted_file_name || file.original_file_name}`
+            );
+          } else {
+            throw new Error(`Fetch failed: ${response.status}`);
+          }
+        } catch (fallbackErr) {
+          console.error("Fallback download also failed:", fallbackErr);
+          // Last resort: open in new tab
+          window.open(file.download_url, "_blank");
+        }
+      } else {
+        alert("Download failed. File not available.");
+      }
     }
   };
 
