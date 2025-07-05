@@ -1,0 +1,59 @@
+# We only want to deploy the Vite frontend, ignore everything else
+
+# Other frontend (Next.js)
+packages/frontend/
+
+# Backend (deployed separately)
+packages/backend/
+
+# Database files
+packages/db/
+
+# Development files
+*.md
+README.md
+tsconfig.json
+
+# Dependencies (will be installed by Vercel)
+node_modules/
+packages/*/node_modules/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (set in Vercel dashboard)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+temp/
+.tmp/
+
+# Build artifacts from other packages
+packages/frontend/.next/
+packages/backend/dist/
+
+# Docker files
+Dockerfile
+docker-compose.yml
+
+# Railway deployment files
+railway.toml
+packages/*/railway.toml
+
+# Supabase files
+supabase/ 
