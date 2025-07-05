@@ -269,33 +269,36 @@ export function ReadyDownloads() {
       }, TIME_FOR_NEW_ZIP_MESSAGE);
 
       const filePaths = userFiles
-        .filter(
-          (file) => file.download_url && file.file_path.includes("/converted/")
-        )
+        .filter((file) => file.download_url && file.file_path)
         .map((file) => file.file_path);
 
       console.log(
-        `📦 Attempting to download ${filePaths.length} converted files:`,
+        `📦 Attempting to download ${filePaths.length} files:`,
         filePaths
+      );
+      console.log(
+        "📋 File details:",
+        userFiles.map((f) => ({
+          name: f.original_file_name,
+          path: f.file_path,
+          hasUrl: !!f.download_url,
+        }))
       );
 
       if (filePaths.length > 0) {
         await downloadZip.mutateAsync(filePaths);
         console.log("✅ Zip download completed successfully");
       } else {
-        console.warn("⚠️ No converted files found for zip download");
-        throw new Error("No converted files available for download");
+        console.warn("⚠️ No files found for zip download");
+        throw new Error("No files available for download");
       }
     } catch (err) {
       console.error("Failed to download zip:", err);
 
       // Show user-friendly error message
-      if (
-        err instanceof Error &&
-        err.message.includes("No converted files available")
-      ) {
+      if (err instanceof Error && err.message.includes("No files available")) {
         alert(
-          "No converted files are available for download. Please convert some files first."
+          "No files are available for download. Please convert some files first."
         );
       } else {
         alert(

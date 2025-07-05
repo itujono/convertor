@@ -18,23 +18,26 @@ const zipCache = new Map<
 >();
 
 // Clean up expired cache entries (run every hour)
-setInterval(() => {
-  const now = Date.now();
-  const oneHour = 60 * 60 * 1000;
+setInterval(
+  () => {
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
 
-  for (const [key, value] of zipCache.entries()) {
-    if (now - value.createdAt > oneHour) {
-      zipCache.delete(key);
+    for (const [key, value] of zipCache.entries()) {
+      if (now - value.createdAt > oneHour) {
+        zipCache.delete(key);
 
-      unlink(value.filePath).catch((err) => {
-        console.warn(
-          `Failed to delete expired cached ZIP: ${value.filePath}`,
-          err
-        );
-      });
+        unlink(value.filePath).catch((err) => {
+          console.warn(
+            `Failed to delete expired cached ZIP: ${value.filePath}`,
+            err
+          );
+        });
+      }
     }
-  }
-}, 60 * 60 * 1000); // 1 hour
+  },
+  60 * 60 * 1000
+); // 1 hour
 
 function generateCacheKey(filePaths: string[]): string {
   const sortedPaths = [...filePaths].sort();
@@ -207,7 +210,11 @@ export async function downloadZipHandler(c: Context<{ Variables: Variables }>) {
           try {
             console.log(`Downloading file: ${filePath}`);
             const fileBuffer = await downloadFile(filePath);
+            // Extract meaningful filename from path
             const fileName = filePath.split("/").pop() || "file";
+            console.log(
+              `📄 Extracted filename: ${fileName} from path: ${filePath}`
+            );
             return { fileName, fileBuffer, filePath };
           } catch (error) {
             console.warn(`Could not download file ${filePath}:`, error);
