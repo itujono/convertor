@@ -1,5 +1,7 @@
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function Navbar() {
   const appSettings = useAppSettings();

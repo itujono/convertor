@@ -51,7 +51,27 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <RouterProvider router={router} />
-          <Toaster richColors position="top-right" />
+          <Toaster
+            // richColors
+            position="top-right"
+            toastOptions={{
+              style: {
+                backdropFilter: "blur(8px)",
+                boxShadow:
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+              },
+              classNames: {
+                toast:
+                  "backdrop-blur-sm bg-white/95 border-black/10 rounded-xl",
+                success:
+                  "!bg-white/95 !border-black/10 !text-green-700 rounded-xl",
+                error: "!bg-white/95 !border-black/10 !text-red-700 rounded-xl",
+                warning:
+                  "!bg-white/95 !border-black/10 !text-amber-700 rounded-xl",
+                info: "!bg-white/95 !border-black/10 !text-blue-700 rounded-xl",
+              },
+            }}
+          />
           <ReactQueryDevtools initialIsOpen={false} />
         </AuthProvider>
       </QueryClientProvider>
