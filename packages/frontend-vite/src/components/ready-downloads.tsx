@@ -104,7 +104,7 @@ function ImagePreview({ file }: { file: UserFile }) {
           height={40}
           src={file.download_url}
           alt={file.original_file_name}
-          className="size-full object-cover rounded"
+          className="size-full object-cover"
           onError={() => setImageError(true)}
         />
       </DialogTrigger>
@@ -494,9 +494,9 @@ export function ReadyDownloads() {
   }
 
   return (
-    <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-6">
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="relative bottom-10 rounded-t-none pt-8 pb-8 px-4 md:px-6">
+      <CardHeader className="px-0 sm:px-6">
+        <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Ready to Download ({userFiles.length})</CardTitle>
           <div className="flex gap-2 flex-row sm:items-center sm:gap-2">
             {userFiles.length > 1 && (
@@ -525,8 +525,8 @@ export function ReadyDownloads() {
               />
             </Button>
           </div>
-        </div>
-        <div className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
+        </section>
+        <section className="rounded-md border border-amber-500/50 px-4 py-3 text-amber-600 mt-4 w-fit">
           <p className="text-sm">
             <TriangleAlert
               className="me-3 -mt-0.5 inline-flex text-amber-500"
@@ -535,35 +535,34 @@ export function ReadyDownloads() {
             />
             Files are automatically removed after 24 hours
           </p>
-        </div>
+        </section>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0 sm:px-6">
         <div className="space-y-3">
           {currentFiles.map((file) => {
             const expirationStatus = getExpirationStatus(file.time_remaining);
-
             return (
               <div
                 key={file.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 border rounded-lg"
               >
                 <div className="flex gap-3 flex-1 min-w-0">
-                  <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded border overflow-hidden">
+                  <section className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-md border overflow-hidden hover:opacity-80 transition-opacity">
                     <ImagePreview file={file} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2 mb-1">
-                      <p className="font-medium truncate text-sm">
+                  </section>
+                  <section className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm truncate min-w-0 flex-1 sm:flex-none">
                         {file.original_file_name}
                       </p>
                       <Badge
                         variant={expirationStatus.variant}
-                        className="text-xs w-fit"
+                        className="text-xs shrink-0"
                       >
                         {expirationStatus.text}
                       </Badge>
                     </div>
-                    <div className="flex flex-wrap items-center gap-y-1 gap-x-4 sm:gap-x-2 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-y-1 gap-x-4 sm:gap-x-2 text-xs text-muted-foreground mt-2">
                       <span>
                         {file.original_format.toUpperCase()} →{" "}
                         {file.converted_format.toUpperCase()}
@@ -580,10 +579,28 @@ export function ReadyDownloads() {
                         {formatRelativeTime(file.created_at)}
                       </span>
                     </div>
-                  </div>
+                    <div className="items-center gap-2 w-full sm:w-auto flex sm:hidden mt-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleDownload(file)}
+                        disabled={!file.download_url}
+                        className="h-8 flex-1 sm:flex-none"
+                      >
+                        <DownloadIcon className="size-3 mr-1" />
+                        Download
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteClick(file)}
+                        className="h-8 text-muted-foreground hover:text-destructive shrink-0"
+                      >
+                        <TrashIcon className="size-3" />
+                      </Button>
+                    </div>
+                  </section>
                 </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="items-center gap-2 w-full sm:w-auto hidden sm:flex">
                   <Button
                     size="sm"
                     onClick={() => handleDownload(file)}
