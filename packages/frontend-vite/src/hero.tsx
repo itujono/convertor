@@ -20,22 +20,22 @@ export default function Hero() {
               id="hero-heading"
               className="text-4xl md:text-5xl lg:text-5xl font-bold text-slate-900 dark:text-white font-title"
             >
-              Convert any files
+              Transform anything
               <br />
-              in seconds
+              into anything
               <br />
-              for free.
+              instantly.
             </h1>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-lg">
-              Transform your images, videos, audio files, and documents
-              instantly. Support for 50+ formats with privacy-first approach. No
-              credit card required.
+              Don't let file formats hold you back. Convert images, videos,
+              audio, and documents in lightning speed. 50+ formats supported,
+              zero hassle, complete privacy.
             </p>
           </header>
 
           <a href="#upload" aria-label="Start converting files">
             <Button size="lg" className="px-8 py-3 rounded-full">
-              Start Converting{" "}
+              Try It Now - It's Magic{" "}
               <ArrowDownIcon className="w-4 h-4" aria-hidden="true" />
             </Button>
           </a>
